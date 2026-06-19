@@ -1,4 +1,10 @@
 const form = document.querySelector("#requestForm");
+const pageTitle = document.querySelector("#page-title");
+const previewTitle = document.querySelector("#preview-title");
+const openContractManagementButton = document.querySelector("#openContractManagementButton");
+const copyCustomerManagementButton = document.querySelector("#copyCustomerManagementButton");
+const printCustomerManagementButton = document.querySelector("#printCustomerManagementButton");
+const backToMainButton = document.querySelector("#backToMainButton");
 const output = document.querySelector("#output");
 const copyButton = document.querySelector("#copyButton");
 const kakaoCopyButton = document.querySelector("#kakaoCopyButton");
@@ -15,6 +21,9 @@ const loadCustomerButton = document.querySelector("#loadCustomerButton");
 const newCustomerButton = document.querySelector("#newCustomerButton");
 const deleteCustomerButton = document.querySelector("#deleteCustomerButton");
 const managerStatus = document.querySelector("#managerStatus");
+const contractList = document.querySelector("#contractList");
+const contractTemplate = document.querySelector("#contractTemplate");
+const addContractButton = document.querySelector("#addContractButton");
 const comparisonList = document.querySelector("#comparisonList");
 const addComparisonButton = document.querySelector("#addComparisonButton");
 const noticeList = document.querySelector("#noticeList");
@@ -57,13 +66,6 @@ const fields = {
 
   requestItems: document.querySelector("#requestItems"),
 
-  insuranceCompany: document.querySelector("#insuranceCompany"),
-  insuranceProduct: document.querySelector("#insuranceProduct"),
-  contractPremium: document.querySelector("#contractPremium"),
-  contractDate: document.querySelector("#contractDate"),
-  contractStatus: document.querySelector("#contractStatus"),
-  contractMemo: document.querySelector("#contractMemo"),
-
   medDisease: document.querySelector("#medDisease"),
   medName: document.querySelector("#medName"),
   medPeriod: document.querySelector("#medPeriod"),
@@ -72,6 +74,7 @@ const fields = {
 let noticeIdCounter = 0;
 let fiveYearIdCounter = 0;
 let tenYearIdCounter = 0;
+let contractIdCounter = 0;
 const customerStorageKey = "insuranceDisclosureCustomers";
 const autoSaveDraftKey = "insuranceDisclosureAutoSaveDraft";
 let autoSaveTimer = null;
@@ -129,6 +132,18 @@ function showManagerStatus(message) {
   window.setTimeout(() => {
     managerStatus.textContent = "";
   }, 2000);
+}
+
+function setContractManagementMode(enabled, updateHash = true) {
+  document.body.classList.toggle("contract-management-mode", enabled);
+  pageTitle.textContent = enabled ? "계약 및 보험사 비교 관리" : "보험 고객 관리용 입력 시스템";
+
+  if (updateHash) {
+    const nextUrl = enabled ? "#contracts" : window.location.pathname + window.location.search;
+    window.history.replaceState(null, "", nextUrl);
+  }
+
+  window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 function selectedValue(container, selector) {
@@ -415,6 +430,74 @@ function collectTenYearCards() {
   return [...tenYearList.querySelectorAll(".notice-card")].map(collectTenYearNotice);
 }
 
+function refreshContractNumbers() {
+  [...contractList.querySelectorAll(".contract-card")].forEach((card, index) => {
+    card.querySelector("[data-contract-number]").textContent = index + 1;
+    const company = card.querySelector('[data-contract-field="company"]').value.trim();
+    const product = card.querySelector('[data-contract-field="product"]').value.trim();
+    const summary = [company, product].filter(Boolean).join(" / ");
+    card.querySelector("[data-contract-summary]").textContent = summary ? `- ${summary}` : "";
+  });
+}
+
+function setContractCollapsed(card, collapsed) {
+  card.classList.toggle("is-collapsed", collapsed);
+  card.querySelector("[data-toggle-contract]").textContent = collapsed ? "펼치기" : "접기";
+}
+
+function addContract(prefill = {}) {
+  const fragment = contractTemplate.content.cloneNode(true);
+  const card = fragment.querySelector(".contract-card");
+  card.dataset.contractId = ++contractIdCounter;
+  card.querySelector('[data-contract-field="company"]').value = prefill.company ?? "";
+  card.querySelector('[data-contract-field="product"]').value = prefill.product ?? "";
+  card.querySelector('[data-contract-field="premium"]').value = prefill.premium ?? "";
+  card.querySelector('[data-contract-field="date"]').value = prefill.date ?? "";
+  card.querySelector('[data-contract-field="status"]').value = prefill.status ?? "";
+  card.querySelector('[data-contract-field="memo"]').value = prefill.memo ?? "";
+  setContractCollapsed(card, Boolean(prefill.collapsed));
+  contractList.append(card);
+  refreshContractNumbers();
+  renderOutput();
+}
+
+function collectContract(card) {
+  return {
+    company: card.querySelector('[data-contract-field="company"]').value.trim(),
+    product: card.querySelector('[data-contract-field="product"]').value.trim(),
+    premium: card.querySelector('[data-contract-field="premium"]').value.trim(),
+    date: card.querySelector('[data-contract-field="date"]').value,
+    status: card.querySelector('[data-contract-field="status"]').value,
+    memo: card.querySelector('[data-contract-field="memo"]').value.trim(),
+    collapsed: card.classList.contains("is-collapsed"),
+  };
+}
+
+function collectContracts() {
+  return [...contractList.querySelectorAll(".contract-card")].map(collectContract);
+}
+
+function getContractsFromState(state) {
+  if (Array.isArray(state.contracts) && state.contracts.length) {
+    return state.contracts;
+  }
+
+  const legacy = {
+    company: state.fields?.insuranceCompany ?? "",
+    product: state.fields?.insuranceProduct ?? "",
+    premium: state.fields?.contractPremium ?? "",
+    date: state.fields?.contractDate ?? "",
+    status: state.fields?.contractStatus ?? "",
+    memo: state.fields?.contractMemo ?? "",
+  };
+  return Object.values(legacy).some(Boolean) ? [legacy] : [{}];
+}
+
+function applyContracts(rows = []) {
+  contractList.innerHTML = "";
+  (rows.length ? rows : [{}]).forEach((row) => addContract(row));
+}
+
 function refreshComparisonNumbers() {
   [...comparisonList.querySelectorAll(".comparison-row")].forEach((row, index) => {
     row.querySelector('input[name="finalChoice"]').value = String(index);
@@ -425,7 +508,7 @@ function addComparisonRow(prefill = {}) {
   const row = document.createElement("div");
   row.className = "comparison-row";
   row.innerHTML = `
-    <label><span>최종</span><input type="radio" name="finalChoice" /></label>
+    <label><span>최종</span><input type="checkbox" name="finalChoice" /></label>
     <label><span>보험회사</span><input data-compare-field="company" type="text" /></label>
     <label><span>보험상품</span><input data-compare-field="product" type="text" /></label>
     <label><span>가격</span><input data-compare-field="price" type="text" /></label>
@@ -448,7 +531,7 @@ function collectComparisonRows() {
     product: row.querySelector('[data-compare-field="product"]').value.trim(),
     price: row.querySelector('[data-compare-field="price"]').value.trim(),
     memo: row.querySelector('[data-compare-field="memo"]').value.trim(),
-    selected: selectedValue(document, 'input[name="finalChoice"]') === String(index),
+    selected: row.querySelector('input[name="finalChoice"]').checked,
   }));
 }
 
@@ -466,8 +549,13 @@ function applyComparisonRows(rows = []) {
 }
 
 function collectCustomerState() {
+  const contracts = collectContracts();
+  const firstContract = contracts.find((contract) =>
+    contract.company || contract.product || contract.premium || contract.date || contract.status || contract.memo,
+  ) ?? contracts[0] ?? {};
+
   return {
-    version: 1,
+    version: 2,
     savedAt: new Date().toISOString(),
     fields: {
       designNumber: getFieldValue("designNumber"),
@@ -485,16 +573,17 @@ function collectCustomerState() {
       relationship: getFieldValue("relationship"),
       planType: fields.planType?.value ?? "",
       requestItems: fields.requestItems?.value ?? "",
-      insuranceCompany: getFieldValue("insuranceCompany"),
-      insuranceProduct: getFieldValue("insuranceProduct"),
-      contractPremium: getFieldValue("contractPremium"),
-      contractDate: getFieldValue("contractDate"),
-      contractStatus: fields.contractStatus?.value ?? "",
-      contractMemo: fields.contractMemo?.value ?? "",
+      insuranceCompany: firstContract.company ?? "",
+      insuranceProduct: firstContract.product ?? "",
+      contractPremium: firstContract.premium ?? "",
+      contractDate: firstContract.date ?? "",
+      contractStatus: firstContract.status ?? "",
+      contractMemo: firstContract.memo ?? "",
       medDisease: getFieldValue("medDisease"),
       medName: getFieldValue("medName"),
       medPeriod: getFieldValue("medPeriod"),
     },
+    contracts,
     comparison: collectComparisonRows(),
     designDirection: {
       coverageFocus: getCheckedValues('input[name="coverageFocus"]'),
@@ -526,6 +615,7 @@ function applyCustomerState(state) {
   if (!state.fields?.residentNumber && state.fields?.birthDate) {
     setFieldValue("residentNumber", state.fields.birthDate);
   }
+  applyContracts(getContractsFromState(state));
   applyComparisonRows(state.comparison ?? []);
 
   setCheckedValues("coverageFocus", state.designDirection?.coverageFocus ?? []);
@@ -722,20 +812,25 @@ function buildDesignDirectionLines() {
 }
 
 function buildContractLines() {
-  const contractRows = [
-    ["보험사", getFieldValue("insuranceCompany")],
-    ["보험상품", getFieldValue("insuranceProduct")],
-    ["보험료", getFieldValue("contractPremium")],
-    ["계약일", getFieldValue("contractDate")],
-    ["계약상태", fields.contractStatus?.value ?? ""],
-    ["계약 메모", fields.contractMemo?.value?.trim() ?? ""],
-  ].filter(([, value]) => value);
+  const contracts = collectContracts().filter((contract) =>
+    contract.company || contract.product || contract.premium || contract.date || contract.status || contract.memo,
+  );
+  const lines = [];
 
-  if (!contractRows.length) {
-    return [];
-  }
+  contracts.forEach((contract, index) => {
+    const rows = [
+      ["보험사", contract.company],
+      ["보험상품", contract.product],
+      ["보험료", contract.premium],
+      ["계약일", contract.date],
+      ["계약상태", contract.status],
+      ["계약 메모", contract.memo],
+    ].filter(([, value]) => value);
 
-  return contractRows.map(([label, value]) => `${label}: ${value}`);
+    lines.push(`[계약 ${index + 1}]`, ...rows.map(([label, value]) => `${label}: ${value}`), "");
+  });
+
+  return lines;
 }
 
 function buildComparisonLines() {
@@ -756,10 +851,13 @@ function buildComparisonLines() {
     lines.push("");
   });
 
-  const selected = rows.find((row) => row.selected);
-  if (selected) {
-    const finalText = [selected.company, selected.product, selected.price].filter(Boolean).join(" / ");
-    lines.push(`최종 결정: ${finalText || "선택 상품 정보 확인 필요"}`);
+  const selectedRows = rows.filter((row) => row.selected);
+  if (selectedRows.length) {
+    lines.push("최종 결정:");
+    selectedRows.forEach((selected, index) => {
+      const finalText = [selected.company, selected.product, selected.price].filter(Boolean).join(" / ");
+      lines.push(`* ${index + 1}. ${finalText || "선택 상품 정보 확인 필요"}`);
+    });
   }
 
   return lines;
@@ -924,12 +1022,16 @@ function renderOutput() {
 function buildCustomerLabel(customer) {
   const name = customer.state?.fields?.customerName || "이름없음";
   const residentNumber = customer.state?.fields?.residentNumber || customer.state?.fields?.birthDate;
-  const company = customer.state?.fields?.insuranceCompany;
-  const product = customer.state?.fields?.insuranceProduct;
-  const finalChoice = customer.state?.comparison?.find((row) => row.selected);
-  const finalSummary = finalChoice
-    ? [finalChoice.company, finalChoice.product, finalChoice.price].filter(Boolean).join(" ")
+  const firstContract = customer.state?.contracts?.find((contract) => contract.company || contract.product) ?? {};
+  const company = firstContract.company || customer.state?.fields?.insuranceCompany;
+  const product = firstContract.product || customer.state?.fields?.insuranceProduct;
+  const finalChoices = customer.state?.comparison?.filter((row) => row.selected) ?? [];
+  const firstFinalSummary = finalChoices.length
+    ? [finalChoices[0].company, finalChoices[0].product, finalChoices[0].price].filter(Boolean).join(" ")
     : "";
+  const finalSummary = finalChoices.length > 1
+    ? `${firstFinalSummary || "최종상품"} 외 ${finalChoices.length - 1}건`
+    : firstFinalSummary;
   const savedDate = customer.updatedAt ? new Date(customer.updatedAt).toLocaleString("ko-KR") : "";
   return [name, residentNumber, finalSummary || company, finalSummary ? "" : product, savedDate].filter(Boolean).join(" / ");
 }
@@ -941,9 +1043,18 @@ function normalizeSearchText(value) {
 function buildCustomerSearchText(customer) {
   const state = customer.state ?? {};
   const customerFields = state.fields ?? {};
-  const finalChoice = state.comparison?.find((row) => row.selected) ?? {};
+  const finalChoices = state.comparison?.filter((row) => row.selected) ?? [];
+  const finalChoiceValues = finalChoices.flatMap((row) => [row.company, row.product, row.price, row.memo]);
   const comparisonMemos = (state.comparison ?? []).map((row) => row.memo);
   const designDirection = state.designDirection ?? {};
+  const contractSearchValues = (state.contracts ?? []).flatMap((contract) => [
+    contract.company,
+    contract.product,
+    contract.premium,
+    contract.date,
+    contract.status,
+    contract.memo,
+  ]);
 
   return normalizeSearchText([
     customerFields.customerName,
@@ -954,15 +1065,13 @@ function buildCustomerSearchText(customer) {
     customerFields.phoneCarrier,
     customerFields.address,
     customerFields.email,
-    finalChoice.company,
-    finalChoice.product,
-    finalChoice.price,
-    finalChoice.memo,
+    ...finalChoiceValues,
     customerFields.insuranceCompany,
     customerFields.insuranceProduct,
     customerFields.contractPremium,
     customerFields.contractStatus,
     customerFields.contractMemo,
+    ...contractSearchValues,
     customerFields.planType,
     customerFields.requestItems,
     designDirection.coverageFocus?.join(" "),
@@ -974,11 +1083,14 @@ function buildCustomerSearchText(customer) {
 }
 
 function getCustomerSearchKeyword() {
-  return normalizeSearchText(customerSearchInput?.value || getFieldValue("customerName"));
+  return normalizeSearchText(customerSearchInput?.value ?? "");
 }
 
-function getFilteredCustomers() {
-  const keyword = getCustomerSearchKeyword();
+function getLoadCustomerSearchKeyword() {
+  return getCustomerSearchKeyword() || normalizeSearchText(getFieldValue("customerName"));
+}
+
+function getFilteredCustomers(keyword = getCustomerSearchKeyword()) {
   return getStoredCustomers()
     .filter((customer) => {
       return !keyword || buildCustomerSearchText(customer).includes(keyword);
@@ -1170,8 +1282,8 @@ function loadSelectedCustomer() {
   let selectedId = savedCustomerSelect.value;
 
   if (!selectedId) {
-    const keyword = getCustomerSearchKeyword();
-    const customers = getFilteredCustomers();
+    const keyword = getLoadCustomerSearchKeyword();
+    const customers = getFilteredCustomers(keyword);
     const exactMatch = customers.find(
       (customer) => normalizeSearchText(customer.state?.fields?.customerName) === keyword,
     );
@@ -1223,6 +1335,7 @@ function startNewCustomer() {
     fiveYearNotices: [],
     tenYearStatus: "none",
     tenYearNotices: [],
+    contracts: [{}],
     comparison: [],
   };
 
@@ -1255,6 +1368,22 @@ async function copyText(text, successMessage) {
   }, 1800);
 }
 
+function printCustomerRecord() {
+  const originalTitle = previewTitle.textContent;
+  previewTitle.textContent = "고객관리 정보";
+  document.body.classList.add("customer-record-print");
+  renderOutput();
+
+  const cleanup = () => {
+    document.body.classList.remove("customer-record-print");
+    previewTitle.textContent = originalTitle;
+  };
+
+  window.addEventListener("afterprint", cleanup, { once: true });
+  window.print();
+  window.setTimeout(cleanup, 0);
+}
+
 function downloadFile(filename, content, type) {
   const blob = new Blob([content], { type });
   const url = URL.createObjectURL(blob);
@@ -1282,17 +1411,25 @@ function exportExcel() {
     ["연락처(통신사 포함)", getFieldValue("phoneCarrier")],
     ["주소", getFieldValue("address")],
     ["이메일", getFieldValue("email")],
-    ["보험사", getFieldValue("insuranceCompany")],
-    ["보험상품", getFieldValue("insuranceProduct")],
-    ["보험료", getFieldValue("contractPremium")],
-    ["계약일", getFieldValue("contractDate")],
-    ["계약상태", fields.contractStatus?.value ?? ""],
-    ["계약 메모", fields.contractMemo?.value ?? ""],
     ["추가 요청사항", splitLines(fields.requestItems.value).join(", ")],
     ["설계 방향", buildDesignDirectionLines().join("\n")],
     ["중대질환", buildMajorDiseaseLine()],
     ["약 복용", buildMedicationLine()],
   ];
+
+  collectContracts().forEach((contract, index) => {
+    const details = [
+      contract.company,
+      contract.product,
+      contract.premium,
+      contract.date,
+      contract.status,
+      contract.memo,
+    ].filter(Boolean);
+    if (details.length) {
+      rows.push([`계약정보 ${index + 1}`, details.join(" / ")]);
+    }
+  });
 
   getActiveComparisonRows().forEach((row, index) => {
     rows.push([
@@ -1423,6 +1560,27 @@ noticeList.addEventListener("click", (event) => {
   scheduleAutoSave();
 });
 
+contractList.addEventListener("click", (event) => {
+  const card = event.target.closest(".contract-card");
+  if (!card) return;
+
+  if (event.target.matches("[data-toggle-contract]")) {
+    setContractCollapsed(card, !card.classList.contains("is-collapsed"));
+    scheduleAutoSave();
+    return;
+  }
+
+  if (event.target.matches("[data-remove-contract]")) {
+    card.remove();
+    if (!contractList.querySelector(".contract-card")) {
+      addContract();
+    }
+    refreshContractNumbers();
+    renderOutput();
+    scheduleAutoSave();
+  }
+});
+
 fiveYearList.addEventListener("click", (event) => {
   if (!event.target.matches("[data-remove-five-year]")) return;
   event.target.closest(".notice-card").remove();
@@ -1441,6 +1599,16 @@ tenYearList.addEventListener("click", (event) => {
 
 addNoticeButton.addEventListener("click", () => {
   addNotice();
+  scheduleAutoSave();
+});
+openContractManagementButton.addEventListener("click", () => setContractManagementMode(true));
+copyCustomerManagementButton.addEventListener("click", () => {
+  copyText(buildOutput(), "고객정보 복사 완료");
+});
+printCustomerManagementButton.addEventListener("click", printCustomerRecord);
+backToMainButton.addEventListener("click", () => setContractManagementMode(false));
+addContractButton.addEventListener("click", () => {
+  addContract();
   scheduleAutoSave();
 });
 addComparisonButton.addEventListener("click", () => {
@@ -1471,7 +1639,10 @@ savedCustomerSelect.addEventListener("change", () => {
     loadSelectedCustomer();
   }
 });
-form.addEventListener("input", () => {
+form.addEventListener("input", (event) => {
+  if (event.target.matches("[data-contract-field]")) {
+    refreshContractNumbers();
+  }
   renderOutput();
   scheduleAutoSave();
 });
@@ -1501,9 +1672,11 @@ pdfButton.addEventListener("click", () => {
 });
 
 renderSavedCustomerList();
+setContractManagementMode(window.location.hash === "#contracts", false);
 const didRestoreAutoSave = restoreAutoSavedDraft();
 
 if (!didRestoreAutoSave) {
+  addContract();
   addNotice({
     disease: "",
     date: "",

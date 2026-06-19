@@ -90,6 +90,29 @@ button:hover {
   gap: 14px;
 }
 
+.view-navigation {
+  display: flex;
+  gap: 8px;
+}
+
+body:not(.contract-management-mode) .contract-management-section,
+body:not(.contract-management-mode) #copyCustomerManagementButton,
+body:not(.contract-management-mode) #printCustomerManagementButton,
+body:not(.contract-management-mode) #backToMainButton {
+  display: none;
+}
+
+body.contract-management-mode #requestForm > .panel:not(.contract-management-section),
+body.contract-management-mode #openContractManagementButton,
+body.contract-management-mode .preview {
+  display: none;
+}
+
+body.contract-management-mode .app {
+  grid-template-columns: minmax(0, 1fr);
+  width: min(960px, calc(100% - 32px));
+}
+
 .eyebrow {
   margin: 0 0 6px;
   color: var(--accent);
@@ -209,6 +232,52 @@ h3 {
   gap: 10px;
 }
 
+.contract-list {
+  display: grid;
+  gap: 10px;
+}
+
+.contract-card {
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfcfb;
+}
+
+.contract-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.contract-card-head h3 {
+  margin: 0;
+}
+
+.contract-card-head h3 small {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.contract-card-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.contract-card-actions button {
+  min-width: 72px;
+}
+
+.contract-body {
+  margin-top: 12px;
+}
+
+.contract-card.is-collapsed .contract-body {
+  display: none;
+}
+
 .comparison-actions {
   margin-top: 10px;
 }
@@ -224,7 +293,8 @@ h3 {
   background: #ffffff;
 }
 
-.comparison-row input[type="radio"] {
+.comparison-row input[type="radio"],
+.comparison-row input[type="checkbox"] {
   width: 18px;
   min-height: 18px;
   accent-color: var(--accent);
@@ -484,6 +554,14 @@ textarea:focus,
     border: 0;
     padding: 0;
   }
+
+  body.customer-record-print .workspace {
+    display: none !important;
+  }
+
+  body.customer-record-print .preview {
+    display: block !important;
+  }
 }
 
 @media (max-width: 1040px) {
@@ -529,9 +607,25 @@ textarea:focus,
   }
 
   .section-toolbar,
+  .contract-card-head,
   .notice-card-head {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .view-navigation {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .contract-card-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .secondary-button,

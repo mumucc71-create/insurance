@@ -14,6 +14,12 @@
             <p class="eyebrow">Disclosure request system</p>
             <h1 id="page-title">보험 고객 관리용 입력 시스템</h1>
           </div>
+          <div class="view-navigation">
+            <button id="openContractManagementButton" type="button">계약/보험사 비교 관리</button>
+            <button id="copyCustomerManagementButton" class="secondary-button" type="button">고객정보 복사</button>
+            <button id="printCustomerManagementButton" class="secondary-button" type="button">고객관리 인쇄</button>
+            <button id="backToMainButton" class="secondary-button" type="button">메인으로</button>
+          </div>
         </div>
 
         <section class="panel customer-manager" aria-labelledby="customer-manager-title">
@@ -101,56 +107,26 @@
             </label>
           </section>
 
-          <section class="panel">
-            <h2>계약 정보</h2>
-            <div class="grid two">
-              <label>
-                <span>보험사</span>
-                <input id="insuranceCompany" type="text" placeholder="예: 삼성화재" autocomplete="off" />
-              </label>
-              <label>
-                <span>보험상품</span>
-                <input id="insuranceProduct" type="text" placeholder="예: 건강보험 플랜명" autocomplete="off" />
-              </label>
-              <label>
-                <span>보험료</span>
-                <input id="contractPremium" type="text" placeholder="예: 월 102,000원" autocomplete="off" />
-              </label>
-              <label>
-                <span>계약일</span>
-                <input id="contractDate" type="date" />
-              </label>
-              <label>
-                <span>계약상태</span>
-                <select id="contractStatus">
-                  <option value="">선택</option>
-                  <option value="상담중">상담중</option>
-                  <option value="설계중">설계중</option>
-                  <option value="청약완료">청약완료</option>
-                  <option value="계약완료">계약완료</option>
-                  <option value="보류">보류</option>
-                  <option value="취소">취소</option>
-                </select>
-              </label>
+          <section class="panel contract-management-section">
+            <div class="section-toolbar">
+              <h2>계약 정보</h2>
+              <button id="addContractButton" class="secondary-button" type="button">계약정보 추가</button>
             </div>
-            <label>
-              <span>계약 메모</span>
-              <textarea id="contractMemo" rows="3" placeholder="예: 보험료 조정 필요, 다음 상담 예정일 등"></textarea>
-            </label>
+            <div id="contractList" class="contract-list"></div>
           </section>
 
-          <section class="panel">
+          <section class="panel contract-management-section">
             <h2>보험사 비교표</h2>
             <div class="comparison-list" id="comparisonList">
               <div class="comparison-row">
-                <label><span>최종</span><input type="radio" name="finalChoice" value="0" /></label>
+                <label><span>최종</span><input type="checkbox" name="finalChoice" value="0" /></label>
                 <label><span>보험회사</span><input data-compare-field="company" type="text" placeholder="예: A보험" /></label>
                 <label><span>보험상품</span><input data-compare-field="product" type="text" placeholder="예: 건강보험" /></label>
                 <label><span>가격</span><input data-compare-field="price" type="text" placeholder="예: 월 98,000원" /></label>
                 <label><span>메모</span><input data-compare-field="memo" type="text" placeholder="예: 암 진단비 강점" /></label>
               </div>
               <div class="comparison-row">
-                <label><span>최종</span><input type="radio" name="finalChoice" value="1" /></label>
+                <label><span>최종</span><input type="checkbox" name="finalChoice" value="1" /></label>
                 <label><span>보험회사</span><input data-compare-field="company" type="text" /></label>
                 <label><span>보험상품</span><input data-compare-field="product" type="text" /></label>
                 <label><span>가격</span><input data-compare-field="price" type="text" /></label>
@@ -325,6 +301,54 @@
         <pre id="output"></pre>
       </aside>
     </main>
+
+    <template id="contractTemplate">
+      <article class="contract-card">
+        <div class="contract-card-head">
+          <h3>계약 <span data-contract-number></span> <small data-contract-summary></small></h3>
+          <div class="contract-card-actions">
+            <button class="secondary-button" type="button" data-toggle-contract>접기</button>
+            <button class="danger-button" type="button" data-remove-contract>삭제</button>
+          </div>
+        </div>
+        <div class="contract-body">
+          <div class="grid two">
+            <label>
+              <span>보험사</span>
+              <input data-contract-field="company" type="text" placeholder="예: 삼성화재" autocomplete="off" />
+            </label>
+            <label>
+              <span>보험상품</span>
+              <input data-contract-field="product" type="text" placeholder="예: 건강보험 플랜명" autocomplete="off" />
+            </label>
+            <label>
+              <span>보험료</span>
+              <input data-contract-field="premium" type="text" placeholder="예: 월 102,000원" autocomplete="off" />
+            </label>
+            <label>
+              <span>계약일</span>
+              <input data-contract-field="date" type="date" />
+            </label>
+            <label>
+              <span>계약상태</span>
+              <select data-contract-field="status">
+                <option value="">선택</option>
+                <option value="상담중">상담중</option>
+                <option value="설계중">설계중</option>
+                <option value="청약완료">청약완료</option>
+                <option value="계약완료">계약완료</option>
+                <option value="보류">보류</option>
+                <option value="취소">취소</option>
+              </select>
+            </label>
+          </div>
+          <label>
+            <span>계약 메모</span>
+            <textarea data-contract-field="memo" rows="3" placeholder="예: 보험료 조정 필요, 다음 상담 예정일 등"></textarea>
+          </label>
+        </div>
+      </article>
+    </template>
 
     <template id="noticeTemplate">
       <article class="notice-card">
