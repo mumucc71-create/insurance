@@ -5,6 +5,7 @@ const authName = document.querySelector("#authName");
 const authPhone = document.querySelector("#authPhone");
 const signupButton = document.querySelector("#signupButton");
 const authStatus = document.querySelector("#authStatus");
+const configStatus = document.querySelector("#configStatus");
 const appRoot = document.querySelector("#appRoot");
 const logoutButton = document.querySelector("#logoutButton");
 const pageTitle = document.querySelector("#page-title");
@@ -86,6 +87,7 @@ let contractIdCounter = 0;
 const customerStorageKey = "insuranceDisclosureCustomers";
 const autoSaveDraftKey = "insuranceDisclosureAutoSaveDraft";
 const localAccountStorageKey = "insuranceDisclosureLocalAccounts";
+const cloudSessionStorageKey = "insuranceDisclosureCloudSession";
 let autoSaveTimer = null;
 let cloudSyncTimer = null;
 let supabaseClient = null;
@@ -93,6 +95,7 @@ let currentSession = null;
 let isHydratingCloud = false;
 let localMode = false;
 let activeUserId = "";
+const nativeFetch = window.fetch.bind(window);
 
 function getCheckedValues(selector) {
   return [...document.querySelectorAll(selector)]
@@ -168,8 +171,235 @@ function showManagerStatus(message) {
 
 function isSupabaseConfigured() {
   const config = window.INSURANCE_APP_CONFIG ?? {};
-  return Boolean(config.supabaseUrl && config.supabaseAnonKey && window.supabase?.createClient);
+  return Boolean(
+    isValidSupabaseUrl(config.supabaseUrl) &&
+      isValidSupabaseAnonKey(config.supabaseAnonKey),
+  );
 }
+
+function isLatin1HeaderValue(value) {
+  return /^[\u0000-\u00ff]*$/.test(String(value ?? ""));
+}
+
+function isValidSupabaseAnonKey(value) {
+  const key = String(value ?? "").trim();
+  const isJwtAnonKey = key.startsWith("eyJ") && key.split(".").length === 3;
+  const isPublishableKey = key.startsWith("sb_publishable_");
+  return (isJwtAnonKey || isPublishableKey) && /^[A-Za-z0-9._-]+$/.test(key) && isLatin1HeaderValue(key);
+}
+
+function isPlaceholderSupabaseKey(value) {
+  const key = String(value ?? "").trim();
+  return !key || /여기에|진짜|anon public key|붙여넣기|입력|YOUR_|SUPABASE/i.test(key);
+}
+
+function isValidSupabaseUrl(value) {
+  try {
+    const url = new URL(String(value ?? ""));
+    return url.protocol === "https:" && url.hostname.endsWith(".supabase.co");
+  } catch {
+    return false;
+  }
+}
+
+function getSupabaseConfigError() {
+  const config = window.INSURANCE_APP_CONFIG ?? {};
+
+  if (!isValidSupabaseUrl(config.supabaseUrl)) {
+    return "Supabase URL을 확인해주세요.";
+  }
+
+  if (isPlaceholderSupabaseKey(config.supabaseAnonKey)) {
+    return "Supabase anon key 또는 publishable key를 입력하세요";
+  }
+
+  if (!isValidSupabaseAnonKey(config.supabaseAnonKey)) {
+    return "Supabase anon key 또는 publishable key를 입력하세요";
+  }
+
+  return "";
+}
+
+function getSupabaseConfigStatusText() {
+  const config = window.INSURANCE_APP_CONFIG ?? {};
+  const url = String(config.supabaseUrl ?? "").trim();
+  const key = String(config.supabaseAnonKey ?? "").trim();
+
+  if (!url) {
+    return "현재 상태: Supabase URL 없음";
+  }
+
+  if (isPlaceholderSupabaseKey(key)) {
+    return "현재 상태: Supabase anon key 또는 publishable key를 입력하세요";
+  }
+
+  if (!isValidSupabaseAnonKey(key)) {
+    return "현재 상태: Supabase anon key 또는 publishable key를 입력하세요";
+  }
+
+  return `현재 상태: Supabase 연결값 로드됨 (${key.slice(0, 8)}...)`;
+}
+
+function renderConfigStatus() {
+  if (configStatus) {
+    configStatus.textContent = getSupabaseConfigStatusText();
+  }
+}
+
+function hasSupabaseConfigValues() {
+  const config = window.INSURANCE_APP_CONFIG ?? {};
+  return Boolean(config.supabaseUrl || config.supabaseAnonKey);
+}
+
+function ensureSupabaseReadyForAuth() {
+  const message = getSupabaseConfigError();
+  if (!message) return true;
+  supabaseClient = null;
+  authStatus.textContent = message;
+  showAuthScreen(message);
+  return false;
+}
+
+function buildSupabaseHeaders(preferValue = "", authToken = "") {
+  const anonKey = String(window.INSURANCE_APP_CONFIG?.supabaseAnonKey ?? "").trim();
+  const headers = {
+    apikey: anonKey,
+    Authorization: `Bearer ${authToken || anonKey}`,
+    "Content-Type": "application/json",
+  };
+
+  if (preferValue) {
+    headers.Prefer = preferValue;
+  }
+
+  return headers;
+}
+
+function getSupabaseUrl(path) {
+  const baseUrl = String(window.INSURANCE_APP_CONFIG?.supabaseUrl ?? "").trim().replace(/\/$/, "");
+  return `${baseUrl}${path}`;
+}
+
+async function supabaseJson(path, { method = "GET", body, prefer = "", authToken = "" } = {}) {
+  if (!ensureSupabaseReadyForAuth()) {
+    return { data: null, error: { message: "Supabase anon key를 입력하세요" } };
+  }
+
+  return new Promise((resolve) => {
+    const request = new XMLHttpRequest();
+    request.open(method, getSupabaseUrl(path), true);
+
+    Object.entries(buildSupabaseHeaders(prefer, authToken)).forEach(([name, value]) => {
+      request.setRequestHeader(name, value);
+    });
+
+    request.onload = () => {
+      let data = null;
+      try {
+        data = request.responseText ? JSON.parse(request.responseText) : null;
+      } catch {
+        data = request.responseText;
+      }
+
+      if (request.status < 200 || request.status >= 300) {
+        resolve({
+          data: null,
+          error: { message: data?.msg || data?.message || data?.error_description || data?.error || request.statusText },
+        });
+        return;
+      }
+
+      resolve({ data, error: null });
+    };
+
+    request.onerror = () => {
+      resolve({ data: null, error: { message: "Supabase 요청 실패" } });
+    };
+
+    request.send(body === undefined ? null : JSON.stringify(body));
+  });
+}
+
+function normalizeSupabaseSession(data) {
+  const session = data?.session ?? data;
+  const user = data?.user ?? session?.user;
+  const accessToken = session?.access_token ?? data?.access_token;
+
+  if (!user || !accessToken) return null;
+
+  return {
+    access_token: accessToken,
+    refresh_token: session?.refresh_token ?? data?.refresh_token ?? "",
+    user,
+  };
+}
+
+function saveCloudSession(session) {
+  if (session) {
+    localStorage.setItem(cloudSessionStorageKey, JSON.stringify(session));
+  } else {
+    localStorage.removeItem(cloudSessionStorageKey);
+  }
+}
+
+function getFetchBody(input, init) {
+  if (Object.prototype.hasOwnProperty.call(init, "body")) return init.body;
+  if (input instanceof Request) return input.body;
+  return undefined;
+}
+
+function getFetchMethod(input, init) {
+  return init.method || (input instanceof Request ? input.method : undefined);
+}
+
+function getHeaderValue(headers, name) {
+  if (!headers) return "";
+  if (headers instanceof Headers) return headers.get(name) ?? "";
+  const foundKey = Object.keys(headers).find((key) => key.toLowerCase() === name.toLowerCase());
+  return foundKey ? headers[foundKey] : "";
+}
+
+function createSupabaseFetch() {
+  return (input, init = {}) => {
+    const prefer = getHeaderValue(init.headers, "Prefer");
+    return nativeFetch(getFetchUrl(input), {
+      method: getFetchMethod(input, init),
+      body: getFetchBody(input, init),
+      credentials: init.credentials,
+      signal: init.signal,
+      headers: buildSupabaseHeaders(prefer === "return=representation" ? prefer : ""),
+    });
+  };
+}
+
+function getFetchUrl(input) {
+  if (typeof input === "string") return input;
+  if (input instanceof URL) return input.href;
+  return input?.url ?? "";
+}
+
+function installSupabaseFetchGuard() {
+  window.fetch = (input, init = {}) => {
+    const config = window.INSURANCE_APP_CONFIG ?? {};
+    const requestUrl = getFetchUrl(input);
+    const isSupabaseRequest = config.supabaseUrl && requestUrl.startsWith(config.supabaseUrl);
+
+    if (!isSupabaseRequest) {
+      return nativeFetch(input, init);
+    }
+
+    const prefer = getHeaderValue(init.headers, "Prefer");
+    return nativeFetch(requestUrl, {
+      method: getFetchMethod(input, init),
+      body: getFetchBody(input, init),
+      credentials: init.credentials,
+      signal: init.signal,
+      headers: buildSupabaseHeaders(prefer === "return=representation" ? prefer : ""),
+    });
+  };
+}
+
+installSupabaseFetchGuard();
 
 function normalizeAuthPhone(value) {
   return String(value ?? "").replace(/\D/g, "");
@@ -265,6 +495,7 @@ function showAuthScreen(message = "") {
   authScreen.hidden = false;
   appRoot.classList.add("is-auth-hidden");
   authStatus.textContent = message;
+  renderConfigStatus();
 }
 
 function showCustomerApp() {
@@ -276,17 +507,27 @@ async function pushCloudSnapshot() {
   if (!supabaseClient || !currentSession || isHydratingCloud || localMode) return;
 
   const draft = readJsonStorage(getScopedStorageKey(autoSaveDraftKey));
-  const { error } = await supabaseClient
-    .from("insurance_app_data")
-    .upsert(
-      {
-        user_id: currentSession.user.id,
-        customers: getStoredCustomers(),
-        draft,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "user_id" },
-    );
+  const body = {
+    user_id: currentSession.user.id,
+    customers: getStoredCustomers(),
+    draft,
+    updated_at: new Date().toISOString(),
+  };
+  let { error } = await supabaseJson("/rest/v1/insurance_app_data", {
+    method: "POST",
+    body,
+    prefer: "return=representation",
+    authToken: currentSession.access_token,
+  });
+
+  if (error?.message?.includes("duplicate") || error?.message?.includes("violates unique")) {
+    ({ error } = await supabaseJson(`/rest/v1/insurance_app_data?user_id=eq.${encodeURIComponent(currentSession.user.id)}`, {
+      method: "PATCH",
+      body,
+      prefer: "return=representation",
+      authToken: currentSession.access_token,
+    }));
+  }
 
   if (error) {
     showManagerStatus(`클라우드 저장 실패: ${error.message}`);
@@ -319,11 +560,10 @@ async function hydrateFromCloud() {
   isHydratingCloud = true;
 
   const userId = currentSession.user.id;
-  const { data, error } = await supabaseClient
-    .from("insurance_app_data")
-    .select("customers, draft")
-    .eq("user_id", userId)
-    .maybeSingle();
+  const { data, error } = await supabaseJson(
+    `/rest/v1/insurance_app_data?select=customers,draft&user_id=eq.${encodeURIComponent(userId)}`,
+    { authToken: currentSession.access_token },
+  );
 
   if (error) {
     isHydratingCloud = false;
@@ -335,10 +575,12 @@ async function hydrateFromCloud() {
   const customerKey = getScopedStorageKey(customerStorageKey);
   const draftKey = getScopedStorageKey(autoSaveDraftKey);
 
-  if (data) {
-    localStorage.setItem(customerKey, JSON.stringify(data.customers ?? []));
-    if (data.draft) {
-      localStorage.setItem(draftKey, JSON.stringify(data.draft));
+  const cloudRow = Array.isArray(data) ? data[0] : data;
+
+  if (cloudRow) {
+    localStorage.setItem(customerKey, JSON.stringify(cloudRow.customers ?? []));
+    if (cloudRow.draft) {
+      localStorage.setItem(draftKey, JSON.stringify(cloudRow.draft));
     } else {
       localStorage.removeItem(draftKey);
     }
@@ -354,7 +596,7 @@ async function hydrateFromCloud() {
 
   isHydratingCloud = false;
   restoreUiFromCurrentStorage();
-  if (!data) await pushCloudSnapshot();
+  if (!cloudRow) await pushCloudSnapshot();
 }
 
 async function handleAuthSession(session) {
@@ -373,31 +615,30 @@ async function handleAuthSession(session) {
 }
 
 async function initializeAuthentication() {
+  if (hasSupabaseConfigValues() && !ensureSupabaseReadyForAuth()) {
+    localMode = false;
+    return;
+  }
+
   if (!isSupabaseConfigured()) {
     localMode = true;
     showAuthScreen("처음이면 이름과 연락처를 입력한 뒤 회원가입을 눌러주세요.");
     return;
   }
 
-  const config = window.INSURANCE_APP_CONFIG;
-  supabaseClient = window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey);
-  supabaseClient.auth.onAuthStateChange((_event, session) => {
-    window.setTimeout(() => handleAuthSession(session), 0);
-  });
-  const { data, error } = await supabaseClient.auth.getSession();
-  if (error) {
-    showAuthScreen(`로그인 확인 실패: ${error.message}`);
-    return;
-  }
-  await handleAuthSession(data.session);
+  supabaseClient = { mode: "rest" };
+  await handleAuthSession(readJsonStorage(cloudSessionStorageKey));
 }
 
 async function loginWithEmail(event) {
   event.preventDefault();
+  if (hasSupabaseConfigValues() && !ensureSupabaseReadyForAuth()) return;
+
   if (!supabaseClient) {
     await loginLocalAccount();
     return;
   }
+  if (!ensureSupabaseReadyForAuth()) return;
 
   const email = getPhoneAuthEmail();
   const name = authName.value.trim();
@@ -407,18 +648,38 @@ async function loginWithEmail(event) {
   }
 
   authStatus.textContent = "고객정보를 불러오는 중...";
-  const { error } = await supabaseClient.auth.signInWithPassword({
-    email,
-    password: getPhoneAuthPassword(),
-  });
-  authStatus.textContent = error ? "이름 또는 연락처를 확인해주세요." : "고객정보를 불러왔습니다.";
+  try {
+    const { data, error } = await supabaseJson("/auth/v1/token?grant_type=password", {
+      method: "POST",
+      body: {
+        email,
+        password: getPhoneAuthPassword(),
+      },
+    });
+    if (error) {
+      authStatus.textContent = "이름 또는 연락처를 확인해주세요.";
+      return;
+    }
+
+    const session = normalizeSupabaseSession(data);
+    saveCloudSession(session);
+    await handleAuthSession(session);
+    authStatus.textContent = "고객정보를 불러왔습니다.";
+  } catch (error) {
+    authStatus.textContent = error.message.includes("non ISO-8859-1")
+      ? "로그인 실패: supabase-config.js의 anon public key와 브라우저 캐시를 확인해주세요."
+      : `로그인 실패: ${error.message}`;
+  }
 }
 
 async function signupWithEmail() {
+  if (hasSupabaseConfigValues() && !ensureSupabaseReadyForAuth()) return;
+
   if (!supabaseClient) {
     await signupLocalAccount();
     return;
   }
+  if (!ensureSupabaseReadyForAuth()) return;
 
   const phone = normalizeAuthPhone(authPhone.value);
   const name = authName.value.trim();
@@ -429,20 +690,31 @@ async function signupWithEmail() {
   }
 
   authStatus.textContent = "회원가입 중...";
-  const { data, error } = await supabaseClient.auth.signUp({
-    email,
-    password: getPhoneAuthPassword(),
-    options: {
-      data: { name, phone },
-    },
-  });
+  try {
+    const { data, error } = await supabaseJson("/auth/v1/signup", {
+      method: "POST",
+      body: {
+        email,
+        password: getPhoneAuthPassword(),
+        data: { name, phone },
+      },
+    });
 
-  if (error) {
-    authStatus.textContent = `회원가입 실패: ${error.message}`;
-  } else if (!data.session) {
-    authStatus.textContent = "가입 확인 설정 때문에 로그인이 보류되었습니다. 관리자에게 문의해주세요.";
-  } else {
-    authStatus.textContent = "회원가입과 로그인이 완료되었습니다.";
+    if (error) {
+      authStatus.textContent = `회원가입 실패: ${error.message}`;
+    const session = normalizeSupabaseSession(data);
+
+    if (!session) {
+      authStatus.textContent = "가입 확인 설정 때문에 로그인이 보류되었습니다. 관리자에게 문의해주세요.";
+    } else {
+      saveCloudSession(session);
+      await handleAuthSession(session);
+      authStatus.textContent = "회원가입과 로그인이 완료되었습니다.";
+    }
+  } catch (error) {
+    authStatus.textContent = error.message.includes("non ISO-8859-1")
+      ? "회원가입 실패: supabase-config.js의 anon public key와 브라우저 캐시를 확인해주세요."
+      : `회원가입 실패: ${error.message}`;
   }
 }
 
@@ -459,8 +731,16 @@ async function logoutCustomerApp() {
   }
 
   await pushCloudSnapshot();
-  const { error } = await supabaseClient.auth.signOut();
-  if (error) showManagerStatus(`로그아웃 실패: ${error.message}`);
+  if (currentSession?.access_token) {
+    await supabaseJson("/auth/v1/logout", {
+      method: "POST",
+      authToken: currentSession.access_token,
+    });
+  }
+  saveCloudSession(null);
+  currentSession = null;
+  activeUserId = "";
+  showAuthScreen("로그아웃되었습니다.");
 }
 
 function setContractManagementMode(enabled, updateHash = true) {

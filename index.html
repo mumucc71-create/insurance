@@ -11,6 +11,7 @@
       <div class="auth-card">
         <p class="eyebrow">Secure customer cloud</p>
         <h1>보험 고객 관리 로그인</h1>
+        <p class="auth-description">진단 버전: 2026-06-23 config-status</p>
         <p class="auth-description">처음에는 이름과 전화번호로 회원가입하세요. 다음부터 같은 정보로 로그인하면 작업했던 고객 목록을 모두 불러옵니다.</p>
         <form id="authForm" class="auth-form">
           <label>
@@ -26,6 +27,7 @@
             <button id="signupButton" class="secondary-button" type="button">처음 사용자 회원가입</button>
           </div>
         </form>
+        <p id="configStatus" class="auth-status" role="status" aria-live="polite"></p>
         <p id="authStatus" class="auth-status" role="status" aria-live="polite"></p>
       </div>
     </section>
@@ -580,8 +582,7 @@
       </article>
     </template>
 
-    <script src="./supabase-config.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="./script.js?v=20260623-visit-days-only"></script>
+    <script src="./supabase-config.js?v=20260623-publishable-key"></script>
+    <script src="./script.js?v=20260623-publishable-key"></script>
   </body>
 </html>
