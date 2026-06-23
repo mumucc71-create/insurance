@@ -11,6 +11,7 @@ const logoutButton = document.querySelector("#logoutButton");
 const pageTitle = document.querySelector("#page-title");
 const previewTitle = document.querySelector("#preview-title");
 const openContractManagementButton = document.querySelector("#openContractManagementButton");
+const openDesignManagerButton = document.querySelector("#openDesignManagerButton");
 const copyCustomerManagementButton = document.querySelector("#copyCustomerManagementButton");
 const printCustomerManagementButton = document.querySelector("#printCustomerManagementButton");
 const backToMainButton = document.querySelector("#backToMainButton");
@@ -35,6 +36,19 @@ const contractTemplate = document.querySelector("#contractTemplate");
 const addContractButton = document.querySelector("#addContractButton");
 const comparisonList = document.querySelector("#comparisonList");
 const addComparisonButton = document.querySelector("#addComparisonButton");
+const designManagerList = document.querySelector("#designManagerList");
+const addDesignManagerButton = document.querySelector("#addDesignManagerButton");
+const selectedInsurerLabel = document.querySelector("#selectedInsurerLabel");
+const moveSelectedInsurerTop = document.querySelector("#moveSelectedInsurerTop");
+const moveSelectedInsurerUp = document.querySelector("#moveSelectedInsurerUp");
+const moveSelectedInsurerDown = document.querySelector("#moveSelectedInsurerDown");
+const moveSelectedInsurerBottom = document.querySelector("#moveSelectedInsurerBottom");
+const insurerCompanyInput = document.querySelector("#insurerCompanyInput");
+const insurerManagerInput = document.querySelector("#insurerManagerInput");
+const insurerSiteUrlInput = document.querySelector("#insurerSiteUrlInput");
+const insurerBrowserInput = document.querySelector("#insurerBrowserInput");
+const insurerLoginIdInput = document.querySelector("#insurerLoginIdInput");
+const insurerPasswordInput = document.querySelector("#insurerPasswordInput");
 const noticeList = document.querySelector("#noticeList");
 const noticeTemplate = document.querySelector("#noticeTemplate");
 const addNoticeButton = document.querySelector("#addNoticeButton");
@@ -49,6 +63,8 @@ const addTenYearButton = document.querySelector("#addTenYearButton");
 const majorOtherToggle = document.querySelector("#majorOtherToggle");
 const majorOther = document.querySelector("#majorOther");
 const medicationDetails = document.querySelector("#medicationDetails");
+const medicationList = document.querySelector("#medicationList");
+const addMedicationButton = document.querySelector("#addMedicationButton");
 const coverageOtherToggle = document.querySelector("#coverageOtherToggle");
 const coverageOther = document.querySelector("#coverageOther");
 const premiumCustom = document.querySelector("#premiumCustom");
@@ -75,9 +91,6 @@ const fields = {
 
   requestItems: document.querySelector("#requestItems"),
 
-  medDisease: document.querySelector("#medDisease"),
-  medName: document.querySelector("#medName"),
-  medPeriod: document.querySelector("#medPeriod"),
 };
 
 let noticeIdCounter = 0;
@@ -88,6 +101,7 @@ const customerStorageKey = "insuranceDisclosureCustomers";
 const autoSaveDraftKey = "insuranceDisclosureAutoSaveDraft";
 const localAccountStorageKey = "insuranceDisclosureLocalAccounts";
 const cloudSessionStorageKey = "insuranceDisclosureCloudSession";
+const designManagerStorageKey = "insuranceDesignManagers";
 let autoSaveTimer = null;
 let cloudSyncTimer = null;
 let supabaseClient = null;
@@ -96,6 +110,7 @@ let isHydratingCloud = false;
 let localMode = false;
 let activeUserId = "";
 let authSettings = null;
+let selectedDesignManagerRow = null;
 
 function getCheckedValues(selector) {
   return [...document.querySelectorAll(selector)]
@@ -393,18 +408,77 @@ function readJsonStorage(key, fallback = null) {
   }
 }
 
+function getCustomerMergeKey(customer, index) {
+  const fields = customer?.state?.fields ?? {};
+  return customer?.id || [
+    fields.customerName,
+    fields.residentNumber,
+    fields.phoneCarrier,
+    customer?.createdAt,
+    index,
+  ].filter(Boolean).join("|");
+}
+
+function getLatestCustomer(first, second) {
+  const firstTime = new Date(first?.updatedAt || first?.createdAt || 0).getTime();
+  const secondTime = new Date(second?.updatedAt || second?.createdAt || 0).getTime();
+  return secondTime > firstTime ? second : first;
+}
+
+function mergeCustomers(...customerLists) {
+  const merged = new Map();
+
+  customerLists.flat().filter(Boolean).forEach((customer, index) => {
+    const key = getCustomerMergeKey(customer, index);
+    if (!key) return;
+    merged.set(key, merged.has(key) ? getLatestCustomer(merged.get(key), customer) : customer);
+  });
+
+  return [...merged.values()].sort((a, b) => new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0));
+}
+
+function getDesignManagerMergeKey(manager, index) {
+  return [
+    manager?.company,
+    manager?.name,
+    manager?.siteUrl,
+    manager?.loginId,
+    manager?.password,
+    index,
+  ].filter(Boolean).join("|");
+}
+
+function mergeDesignManagers(...managerLists) {
+  const merged = new Map();
+
+  managerLists.flat().filter(Boolean).forEach((manager, index) => {
+    const key = getDesignManagerMergeKey(manager, index);
+    if (!key) return;
+    merged.set(key, manager);
+  });
+
+  return [...merged.values()];
+}
+
 function migrateLegacyDataToCurrentAccount() {
   const customerKey = getScopedStorageKey(customerStorageKey);
   const draftKey = getScopedStorageKey(autoSaveDraftKey);
+  const designManagerKey = getScopedStorageKey(designManagerStorageKey);
   const existingCustomers = readJsonStorage(customerKey, []);
   const legacyCustomers = readJsonStorage(customerStorageKey, []);
+  const existingDesignManagers = readJsonStorage(designManagerKey, []);
+  const legacyDesignManagers = readJsonStorage(designManagerStorageKey, []);
 
   if (!existingCustomers.length && legacyCustomers.length) {
-    localStorage.setItem(customerKey, JSON.stringify(legacyCustomers));
+    localStorage.setItem(customerKey, JSON.stringify(mergeCustomers(existingCustomers, legacyCustomers)));
   }
 
   if (!localStorage.getItem(draftKey) && localStorage.getItem(autoSaveDraftKey)) {
     localStorage.setItem(draftKey, localStorage.getItem(autoSaveDraftKey));
+  }
+
+  if (!existingDesignManagers.length && legacyDesignManagers.length) {
+    localStorage.setItem(designManagerKey, JSON.stringify(mergeDesignManagers(existingDesignManagers, legacyDesignManagers)));
   }
 }
 
@@ -474,10 +548,14 @@ async function pushCloudSnapshot() {
   if (!supabaseClient || !currentSession || isHydratingCloud || localMode) return;
 
   const draft = readJsonStorage(getScopedStorageKey(autoSaveDraftKey));
+  const cloudDraft = {
+    ...(draft && typeof draft === "object" ? draft : {}),
+    designManagers: getStoredDesignManagers(),
+  };
   const body = {
     user_id: currentSession.user.id,
     customers: getStoredCustomers(),
-    draft,
+    draft: cloudDraft,
     updated_at: new Date().toISOString(),
   };
   let { error } = await supabaseJson("/rest/v1/insurance_app_data", {
@@ -512,6 +590,7 @@ function scheduleCloudSync() {
 function restoreUiFromCurrentStorage() {
   customerSearchInput.value = "";
   renderSavedCustomerList();
+  renderDesignManagers();
   const restored = restoreAutoSavedDraft();
 
   if (!restored) {
@@ -525,6 +604,7 @@ function restoreUiFromCurrentStorage() {
 async function hydrateFromCloud() {
   if (!supabaseClient || !currentSession) return;
   isHydratingCloud = true;
+  let shouldPushAfterHydrate = false;
 
   const userId = currentSession.user.id;
   const { data, error } = await supabaseJson(
@@ -541,11 +621,39 @@ async function hydrateFromCloud() {
 
   const customerKey = getScopedStorageKey(customerStorageKey);
   const draftKey = getScopedStorageKey(autoSaveDraftKey);
+  const designManagerKey = getScopedStorageKey(designManagerStorageKey);
 
   const cloudRow = Array.isArray(data) ? data[0] : data;
 
   if (cloudRow) {
-    localStorage.setItem(customerKey, JSON.stringify(cloudRow.customers ?? []));
+    const cloudCustomers = Array.isArray(cloudRow.customers) ? cloudRow.customers : [];
+    const scopedCustomers = readJsonStorage(customerKey, []);
+    const legacyCustomers = readJsonStorage(customerStorageKey, []);
+    const mergedCustomers = mergeCustomers(cloudCustomers, scopedCustomers, legacyCustomers);
+    localStorage.setItem(customerKey, JSON.stringify(mergedCustomers));
+
+    if (mergedCustomers.length > cloudCustomers.length) {
+      shouldPushAfterHydrate = true;
+    }
+
+    if (Array.isArray(cloudRow.draft?.designManagers)) {
+      const scopedDesignManagers = readJsonStorage(designManagerKey, []);
+      const legacyDesignManagers = readJsonStorage(designManagerStorageKey, []);
+      const mergedDesignManagers = mergeDesignManagers(cloudRow.draft.designManagers, scopedDesignManagers, legacyDesignManagers);
+      localStorage.setItem(designManagerKey, JSON.stringify(mergedDesignManagers));
+      if (mergedDesignManagers.length > cloudRow.draft.designManagers.length) {
+        shouldPushAfterHydrate = true;
+      }
+    } else {
+      const scopedDesignManagers = readJsonStorage(designManagerKey, []);
+      const legacyDesignManagers = readJsonStorage(designManagerStorageKey, []);
+      const preservedDesignManagers = mergeDesignManagers(scopedDesignManagers, legacyDesignManagers);
+      if (preservedDesignManagers.length) {
+        localStorage.setItem(designManagerKey, JSON.stringify(preservedDesignManagers));
+        shouldPushAfterHydrate = true;
+      }
+    }
+
     if (cloudRow.draft) {
       localStorage.setItem(draftKey, JSON.stringify(cloudRow.draft));
     } else {
@@ -556,14 +664,17 @@ async function hydrateFromCloud() {
     const legacyCustomers = readJsonStorage(customerStorageKey, []);
     const scopedDraft = readJsonStorage(draftKey);
     const legacyDraft = readJsonStorage(autoSaveDraftKey);
-    localStorage.setItem(customerKey, JSON.stringify(scopedCustomers.length ? scopedCustomers : legacyCustomers));
+    const scopedDesignManagers = readJsonStorage(designManagerKey, []);
+    const legacyDesignManagers = readJsonStorage(designManagerStorageKey, []);
+    localStorage.setItem(customerKey, JSON.stringify(mergeCustomers(scopedCustomers, legacyCustomers)));
+    localStorage.setItem(designManagerKey, JSON.stringify(mergeDesignManagers(scopedDesignManagers, legacyDesignManagers)));
     const migrationDraft = scopedDraft ?? legacyDraft;
     if (migrationDraft) localStorage.setItem(draftKey, JSON.stringify(migrationDraft));
   }
 
   isHydratingCloud = false;
   restoreUiFromCurrentStorage();
-  if (!cloudRow) await pushCloudSnapshot();
+  if (!cloudRow || shouldPushAfterHydrate) await pushCloudSnapshot();
 }
 
 async function handleAuthSession(session) {
@@ -732,7 +843,14 @@ async function logoutCustomerApp() {
 
 function setContractManagementMode(enabled, updateHash = true) {
   document.body.classList.toggle("contract-management-mode", enabled);
-  pageTitle.textContent = enabled ? "계약 및 보험사 비교 관리" : "보험 고객 관리용 입력 시스템";
+  if (enabled) {
+    document.body.classList.remove("design-manager-mode");
+  }
+  pageTitle.textContent = enabled
+    ? "계약 및 보험사 비교 관리"
+    : document.body.classList.contains("design-manager-mode")
+      ? "보험사"
+      : "보험 고객 관리용 입력 시스템";
 
   if (updateHash) {
     const nextUrl = enabled ? "#contracts" : window.location.pathname + window.location.search;
@@ -740,6 +858,32 @@ function setContractManagementMode(enabled, updateHash = true) {
   }
 
   window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function setDesignManagerMode(enabled, updateHash = true) {
+  document.body.classList.toggle("design-manager-mode", enabled);
+  if (enabled) {
+    document.body.classList.remove("contract-management-mode");
+    renderDesignManagers();
+  }
+  pageTitle.textContent = enabled
+    ? "보험사"
+    : document.body.classList.contains("contract-management-mode")
+      ? "계약 및 보험사 비교 관리"
+      : "보험 고객 관리용 입력 시스템";
+
+  if (updateHash) {
+    const nextUrl = enabled ? "#insurers" : window.location.pathname + window.location.search;
+    window.history.replaceState(null, "", nextUrl);
+  }
+
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function goMainMode() {
+  setContractManagementMode(false, false);
+  setDesignManagerMode(false, false);
+  window.history.replaceState(null, "", window.location.pathname + window.location.search);
 }
 
 function selectedValue(container, selector) {
@@ -1137,6 +1281,340 @@ function applyComparisonRows(rows = []) {
   }
 }
 
+function addMedicationRow(prefill = {}, options = {}) {
+  const row = document.createElement("div");
+  row.className = "medication-row";
+  if (options.primary) {
+    row.classList.add("is-primary");
+  }
+  row.innerHTML = `
+    <label><span>질환명</span><input data-medication-field="disease" type="text" autocomplete="off" /></label>
+    <label><span>약물명</span><input data-medication-field="name" type="text" autocomplete="off" /></label>
+    <label><span>복용기간</span><input data-medication-field="period" type="text" placeholder="예: 2024.01~현재" autocomplete="off" /></label>
+    ${options.primary ? '<span class="medication-primary-label">기본</span>' : '<button class="danger-button" type="button" data-remove-medication>삭제</button>'}
+  `;
+  row.querySelector('[data-medication-field="disease"]').value = prefill.disease ?? "";
+  row.querySelector('[data-medication-field="name"]').value = prefill.name ?? "";
+  row.querySelector('[data-medication-field="period"]').value = prefill.period ?? "";
+  medicationList.append(row);
+}
+
+function collectMedicationRows() {
+  return [...medicationList.querySelectorAll(".medication-row")]
+    .map((row) => ({
+      disease: row.querySelector('[data-medication-field="disease"]').value.trim(),
+      name: row.querySelector('[data-medication-field="name"]').value.trim(),
+      period: row.querySelector('[data-medication-field="period"]').value.trim(),
+    }))
+    .filter((item) => item.disease || item.name || item.period);
+}
+
+function getMedicationRowsFromState(state = {}) {
+  if (Array.isArray(state.medications) && state.medications.length) {
+    return state.medications;
+  }
+
+  const legacy = {
+    disease: state.fields?.medDisease ?? "",
+    name: state.fields?.medName ?? "",
+    period: state.fields?.medPeriod ?? "",
+  };
+
+  return legacy.disease || legacy.name || legacy.period ? [legacy] : [{}];
+}
+
+function applyMedicationRows(rows = []) {
+  medicationList.innerHTML = "";
+  (rows.length ? rows : [{}]).forEach((row, index) => addMedicationRow(row, { primary: index === 0 }));
+}
+
+function getStoredDesignManagers() {
+  const saved = readJsonStorage(getScopedStorageKey(designManagerStorageKey), []);
+  return Array.isArray(saved) ? saved.filter((item) => item.company || item.name || item.siteUrl || item.loginId || item.password) : [];
+}
+
+function collectDesignManagers() {
+  return [...designManagerList.querySelectorAll(".design-manager-row")].map((row) => ({
+    company: row.dataset.company ?? "",
+    name: row.dataset.name ?? "",
+    siteUrl: row.dataset.siteUrl ?? "",
+    browser: row.dataset.browser ?? "default",
+    loginId: row.dataset.loginId ?? "",
+    password: row.dataset.password ?? "",
+  }));
+}
+
+function saveDesignManagers() {
+  localStorage.setItem(getScopedStorageKey(designManagerStorageKey), JSON.stringify(collectDesignManagers()));
+  scheduleCloudSync();
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function buildCopyField(label, value, copyType) {
+  const displayValue = value || "-";
+  return `
+    <span class="insurer-copy-field">
+      <span>${label}: ${escapeHtml(displayValue)}</span>
+      <button class="icon-copy-button" type="button" data-copy-insurer="${copyType}" aria-label="${label} 복사" title="${label} 복사">복사</button>
+    </span>
+  `;
+}
+
+function getBrowserLabel(browser) {
+  if (browser === "chrome") return "크롬";
+  if (browser === "edge") return "엣지";
+  return "기본";
+}
+
+function renderDesignManagerView(row) {
+  const company = row.dataset.company ?? "";
+  const name = row.dataset.name ?? "";
+  const siteUrl = row.dataset.siteUrl ?? "";
+  const browser = row.dataset.browser ?? "default";
+  const loginId = row.dataset.loginId ?? "";
+  const password = row.dataset.password ?? "";
+
+  row.classList.remove("is-editing");
+  row.innerHTML = `
+    <div class="insurer-card-main">
+      <div class="insurer-card-row top">
+        <strong>${escapeHtml(company || "보험사 미입력")}</strong>
+        ${buildCopyField("담당자", name, "manager")}
+      </div>
+      <div class="insurer-card-row middle">
+        ${buildCopyField("아이디", loginId, "loginId")}
+        ${buildCopyField("비번", password, "password")}
+        <span>브라우저: ${getBrowserLabel(browser)}</span>
+      </div>
+      <div class="insurer-card-row bottom">
+        <small>${escapeHtml(siteUrl || "사이트 주소 없음")}</small>
+        <button type="button" data-open-site>이동하기</button>
+        <button class="secondary-button" type="button" data-edit-design-manager>수정</button>
+        <button class="danger-button" type="button" data-remove-design-manager>삭제</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderDesignManagerEdit(row) {
+  const browser = row.dataset.browser ?? "default";
+
+  row.classList.add("is-editing");
+  row.innerHTML = `
+    <div class="insurer-card-edit">
+      <label><span>보험사</span><input data-insurer-edit="company" type="text" value="${escapeHtml(row.dataset.company ?? "")}" /></label>
+      <label><span>담당자</span><input data-insurer-edit="name" type="text" value="${escapeHtml(row.dataset.name ?? "")}" /></label>
+      <label><span>사이트주소</span><input data-insurer-edit="siteUrl" type="text" value="${escapeHtml(row.dataset.siteUrl ?? "")}" /></label>
+      <label>
+        <span>브라우저</span>
+        <select data-insurer-edit="browser">
+          <option value="default"${browser === "default" ? " selected" : ""}>기본</option>
+          <option value="chrome"${browser === "chrome" ? " selected" : ""}>크롬</option>
+          <option value="edge"${browser === "edge" ? " selected" : ""}>엣지</option>
+        </select>
+      </label>
+      <label><span>아이디</span><input data-insurer-edit="loginId" type="text" value="${escapeHtml(row.dataset.loginId ?? "")}" /></label>
+      <label><span>비번</span><input data-insurer-edit="password" type="text" value="${escapeHtml(row.dataset.password ?? "")}" /></label>
+    </div>
+    <button type="button" data-save-design-manager>저장</button>
+    <button class="secondary-button" type="button" data-cancel-design-manager>취소</button>
+    <button class="danger-button" type="button" data-remove-design-manager>삭제</button>
+  `;
+
+  row.querySelector('[data-insurer-edit="name"]')?.focus();
+}
+
+function saveDesignManagerEdit(row) {
+  row.dataset.company = row.querySelector('[data-insurer-edit="company"]').value.trim();
+  row.dataset.name = row.querySelector('[data-insurer-edit="name"]').value.trim();
+  row.dataset.siteUrl = row.querySelector('[data-insurer-edit="siteUrl"]').value.trim();
+  row.dataset.browser = row.querySelector('[data-insurer-edit="browser"]').value;
+  row.dataset.loginId = row.querySelector('[data-insurer-edit="loginId"]').value.trim();
+  row.dataset.password = row.querySelector('[data-insurer-edit="password"]').value.trim();
+  renderDesignManagerView(row);
+  saveDesignManagers();
+  showManagerStatus("보험사 정보를 수정했습니다.");
+}
+
+function getDesignManagerLabel(row) {
+  return row?.dataset.company || row?.dataset.name || "선택한 보험사";
+}
+
+function selectDesignManagerRow(row) {
+  if (!row) return;
+  selectedDesignManagerRow?.classList.remove("is-selected");
+  selectedDesignManagerRow = row;
+  selectedDesignManagerRow.classList.add("is-selected");
+  selectedInsurerLabel.textContent = `${getDesignManagerLabel(row)} 선택됨`;
+}
+
+function clearSelectedDesignManagerRow(row) {
+  if (!row || selectedDesignManagerRow !== row) return;
+  selectedDesignManagerRow.classList.remove("is-selected");
+  selectedDesignManagerRow = null;
+  selectedInsurerLabel.textContent = "이동할 카드를 클릭하세요";
+}
+
+function getDesignManagerColumnCount() {
+  const columns = window.getComputedStyle(designManagerList).gridTemplateColumns;
+  const count = columns.split(" ").filter(Boolean).length;
+  return Math.max(1, count);
+}
+
+function swapDesignManagerRows(firstRow, secondRow) {
+  const marker = document.createElement("span");
+  designManagerList.insertBefore(marker, firstRow);
+  designManagerList.insertBefore(firstRow, secondRow);
+  designManagerList.insertBefore(secondRow, marker);
+  marker.remove();
+}
+
+function moveDesignManagerRow(row, direction) {
+  const rows = [...designManagerList.querySelectorAll(".design-manager-row")];
+  const currentIndex = rows.indexOf(row);
+  const columnCount = getDesignManagerColumnCount();
+  const targetIndex = {
+    top: 0,
+    up: currentIndex - columnCount,
+    down: currentIndex + columnCount,
+    bottom: rows.length - 1,
+  }[direction];
+  const targetRow = rows[targetIndex];
+
+  if (!targetRow || targetRow === row) {
+    showManagerStatus(direction === "up" || direction === "top" ? "이미 맨 위입니다." : "이미 맨 아래입니다.");
+    return;
+  }
+
+  if (direction === "top") {
+    designManagerList.insertBefore(row, rows[0]);
+  } else if (direction === "bottom") {
+    designManagerList.append(row);
+  } else {
+    swapDesignManagerRows(row, targetRow);
+  }
+  saveDesignManagers();
+  showManagerStatus("순서를 변경했습니다.");
+  selectDesignManagerRow(row);
+  row.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+function moveSelectedDesignManagerRow(direction) {
+  if (!selectedDesignManagerRow || !designManagerList.contains(selectedDesignManagerRow)) {
+    showManagerStatus("먼저 이동할 보험사 카드를 클릭해주세요.");
+    return;
+  }
+
+  moveDesignManagerRow(selectedDesignManagerRow, direction);
+}
+
+function addDesignManagerRow(prefill = {}, options = {}) {
+  const company = prefill.company ?? "";
+  const name = prefill.name ?? prefill.manager ?? prefill.contact ?? prefill.searchTerms ?? "";
+  const siteUrl = prefill.siteUrl ?? "";
+  const browser = prefill.browser ?? "default";
+  const loginId = prefill.loginId ?? "";
+  const password = prefill.password ?? "";
+  const row = document.createElement("div");
+  row.className = "design-manager-row";
+  row.dataset.company = company;
+  row.dataset.name = name;
+  row.dataset.siteUrl = siteUrl;
+  row.dataset.browser = browser;
+  row.dataset.loginId = loginId;
+  row.dataset.password = password;
+  renderDesignManagerView(row);
+  if (options.prepend) {
+    designManagerList.prepend(row);
+  } else {
+    designManagerList.append(row);
+  }
+}
+
+function renderDesignManagers() {
+  designManagerList.innerHTML = "";
+  selectedDesignManagerRow = null;
+  selectedInsurerLabel.textContent = "이동할 카드를 클릭하세요";
+  getStoredDesignManagers().forEach((manager) => addDesignManagerRow(manager));
+}
+
+function normalizeSiteUrl(value) {
+  const url = value.trim();
+  if (!url) return "";
+  if (/^(https?:\/\/)/i.test(url)) return url;
+  return `https://${url}`;
+}
+
+function openInsuranceSite(row) {
+  const url = normalizeSiteUrl(row.dataset.siteUrl ?? "");
+
+  if (!url) {
+    showManagerStatus("사이트 주소를 입력해주세요.");
+    return;
+  }
+
+  const browser = row.dataset.browser ?? "default";
+  const opened = window.open(url, "_blank", "noopener");
+
+  if (!opened) {
+    copyText(url, "팝업이 차단되어 사이트 주소를 복사했습니다.");
+    return;
+  }
+
+  showManagerStatus(
+    browser === "chrome" || browser === "edge"
+      ? "보안상 브라우저 강제 선택은 제한될 수 있어 기본 새 탭으로 열었습니다."
+      : "사이트를 열었습니다.",
+  );
+}
+
+function clearInsurerForm() {
+  insurerCompanyInput.value = "";
+  insurerManagerInput.value = "";
+  insurerSiteUrlInput.value = "";
+  insurerBrowserInput.value = "default";
+  insurerLoginIdInput.value = "";
+  insurerPasswordInput.value = "";
+}
+
+function createInsurerCardFromForm() {
+  const item = {
+    company: insurerCompanyInput.value.trim(),
+    name: insurerManagerInput.value.trim(),
+    siteUrl: insurerSiteUrlInput.value.trim(),
+    browser: insurerBrowserInput.value,
+    loginId: insurerLoginIdInput.value.trim(),
+    password: insurerPasswordInput.value.trim(),
+  };
+
+  if (!item.company && !item.name && !item.siteUrl && !item.loginId && !item.password) {
+    showManagerStatus("보험사 정보를 입력해주세요.");
+    return;
+  }
+
+  addDesignManagerRow(item, { prepend: true });
+  selectDesignManagerRow(designManagerList.querySelector(".design-manager-row"));
+  saveDesignManagers();
+  clearInsurerForm();
+}
+
+function copyInsurerValue(value, message) {
+  if (!value) {
+    showManagerStatus("복사할 내용이 없습니다. 수정 버튼으로 먼저 입력해주세요.");
+    return;
+  }
+
+  copyText(value, message);
+}
+
 function collectCustomerState() {
   const contracts = collectContracts();
   const firstContract = contracts.find((contract) =>
@@ -1168,12 +1646,10 @@ function collectCustomerState() {
       contractDate: firstContract.date ?? "",
       contractStatus: firstContract.status ?? "",
       contractMemo: firstContract.memo ?? "",
-      medDisease: getFieldValue("medDisease"),
-      medName: getFieldValue("medName"),
-      medPeriod: getFieldValue("medPeriod"),
     },
     contracts,
     comparison: collectComparisonRows(),
+    medications: collectMedicationRows(),
     designDirection: {
       coverageFocus: getCheckedValues('input[name="coverageFocus"]'),
       coverageOtherChecked: coverageOtherToggle.checked,
@@ -1228,6 +1704,7 @@ function applyCustomerState(state) {
 
   setRadioValue("medicationStatus", state.medicationStatus ?? "none");
   toggleElement(medicationDetails, state.medicationStatus === "yes");
+  applyMedicationRows(getMedicationRowsFromState(state));
 
   noticeList.innerHTML = "";
   (state.notices?.length ? state.notices : [{}]).forEach((notice) => addNotice(notice));
@@ -1249,9 +1726,7 @@ function collectMedication() {
   const status = selectedValue(document, 'input[name="medicationStatus"]');
   return {
     status,
-    disease: fields.medDisease.value.trim(),
-    name: fields.medName.value.trim(),
-    period: fields.medPeriod.value.trim(),
+    items: collectMedicationRows(),
   };
 }
 
@@ -1335,9 +1810,10 @@ function buildMedicationLine() {
     return "";
   }
 
-  const details = [medication.disease, medication.name, medication.period]
+  const details = medication.items
+    .map((item) => [item.disease, item.name, item.period].filter(Boolean).join(" / "))
     .filter(Boolean)
-    .join(" / ");
+    .join("; ");
 
   return `약물 복용 있음${details ? `: ${details}` : ": 상세내용 확인 필요"}`;
 }
@@ -1567,9 +2043,15 @@ function validateForm() {
 
   if (collectMedication().status === "yes") {
     const medication = collectMedication();
-    if (!medication.disease || !medication.name || !medication.period) {
-      warnings.push("약 복용 정보의 질환명, 약물명, 복용기간을 모두 입력해주세요.");
+    if (!medication.items.length) {
+      warnings.push("약 복용 정보를 1개 이상 입력해주세요.");
     }
+
+    medication.items.forEach((item, index) => {
+      if (!item.disease || !item.name || !item.period) {
+        warnings.push(`약 복용 정보 ${index + 1}번의 질환명, 약물명, 복용기간을 모두 입력해주세요.`);
+      }
+    });
   }
 
   if (selectedValue(document, 'input[name="fiveYearStatus"]') === "yes" && !collectFiveYear().length) {
@@ -2143,6 +2625,9 @@ function handleFormChange(event) {
 
   if (event.target.name === "medicationStatus") {
     toggleElement(medicationDetails, event.target.value === "yes");
+    if (event.target.value === "yes" && !medicationList.querySelector(".medication-row")) {
+      addMedicationRow({}, { primary: true });
+    }
   }
 
   if (event.target.name === "fiveYearStatus") {
@@ -2198,6 +2683,16 @@ contractList.addEventListener("click", (event) => {
   }
 });
 
+medicationList.addEventListener("click", (event) => {
+  if (!event.target.matches("[data-remove-medication]")) return;
+  event.target.closest(".medication-row").remove();
+  if (!medicationList.querySelector(".medication-row")) {
+    addMedicationRow({}, { primary: true });
+  }
+  renderOutput();
+  scheduleAutoSave();
+});
+
 fiveYearList.addEventListener("click", (event) => {
   if (!event.target.matches("[data-remove-five-year]")) return;
   event.target.closest(".notice-card").remove();
@@ -2214,16 +2709,67 @@ tenYearList.addEventListener("click", (event) => {
   scheduleAutoSave();
 });
 
+designManagerList.addEventListener("click", (event) => {
+  const row = event.target.closest(".design-manager-row");
+  if (!row) return;
+
+  selectDesignManagerRow(row);
+
+  const copyButton = event.target.closest("[data-copy-insurer]");
+  if (copyButton) {
+    const copyType = copyButton.dataset.copyInsurer;
+    const copyMap = {
+      manager: { value: row.dataset.name ?? "", message: "담당자 복사 완료" },
+      loginId: { value: row.dataset.loginId ?? "", message: "아이디 복사 완료" },
+      password: { value: row.dataset.password ?? "", message: "비번 복사 완료" },
+    };
+    const copyItem = copyMap[copyType];
+    if (copyItem) copyInsurerValue(copyItem.value, copyItem.message);
+    return;
+  }
+
+  if (event.target.matches("[data-open-site]")) {
+    openInsuranceSite(row);
+    return;
+  }
+
+  if (event.target.matches("[data-edit-design-manager]")) {
+    renderDesignManagerEdit(row);
+    return;
+  }
+
+  if (event.target.matches("[data-save-design-manager]")) {
+    saveDesignManagerEdit(row);
+    return;
+  }
+
+  if (event.target.matches("[data-cancel-design-manager]")) {
+    renderDesignManagerView(row);
+    return;
+  }
+
+  if (event.target.matches("[data-remove-design-manager]")) {
+    clearSelectedDesignManagerRow(row);
+    row.remove();
+    saveDesignManagers();
+  }
+});
+
 addNoticeButton.addEventListener("click", () => {
   addNotice();
   scheduleAutoSave();
 });
 openContractManagementButton.addEventListener("click", () => setContractManagementMode(true));
+openDesignManagerButton.addEventListener("click", () => setDesignManagerMode(true));
+moveSelectedInsurerTop.addEventListener("click", () => moveSelectedDesignManagerRow("top"));
+moveSelectedInsurerUp.addEventListener("click", () => moveSelectedDesignManagerRow("up"));
+moveSelectedInsurerDown.addEventListener("click", () => moveSelectedDesignManagerRow("down"));
+moveSelectedInsurerBottom.addEventListener("click", () => moveSelectedDesignManagerRow("bottom"));
 copyCustomerManagementButton.addEventListener("click", () => {
   copyText(buildOutput(), "고객정보 복사 완료");
 });
 printCustomerManagementButton.addEventListener("click", printCustomerRecord);
-backToMainButton.addEventListener("click", () => setContractManagementMode(false));
+backToMainButton.addEventListener("click", goMainMode);
 addContractButton.addEventListener("click", () => {
   addContract();
   scheduleAutoSave();
@@ -2231,6 +2777,13 @@ addContractButton.addEventListener("click", () => {
 addComparisonButton.addEventListener("click", () => {
   addComparisonRow();
   scheduleAutoSave();
+});
+addMedicationButton.addEventListener("click", () => {
+  addMedicationRow();
+  scheduleAutoSave();
+});
+addDesignManagerButton.addEventListener("click", () => {
+  createInsurerCardFromForm();
 });
 addFiveYearButton.addEventListener("click", () => {
   addFiveYearNotice();
@@ -2301,4 +2854,5 @@ pdfButton.addEventListener("click", () => {
 
 excelButton.addEventListener("click", exportExcel);
 setContractManagementMode(window.location.hash === "#contracts", false);
+setDesignManagerMode(window.location.hash === "#insurers" || window.location.hash === "#design-manager", false);
 initializeAuthentication();

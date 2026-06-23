@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>보험 고객 관리용 입력 시스템</title>
-    <link rel="stylesheet" href="./styles.css?v=20260623-auth-autoconfirm" />
+    <link rel="stylesheet" href="./styles.css?v=20260623-insurer-ultra-compact" />
   </head>
   <body>
     <section id="authScreen" class="auth-screen">
@@ -41,6 +41,7 @@
           </div>
           <div class="view-navigation">
             <button id="openContractManagementButton" type="button">계약/보험사 비교 관리</button>
+            <button id="openDesignManagerButton" type="button">보험사</button>
             <button id="copyCustomerManagementButton" class="secondary-button" type="button">고객정보 복사</button>
             <button id="printCustomerManagementButton" class="secondary-button" type="button">고객관리 인쇄</button>
             <button id="backToMainButton" class="secondary-button" type="button">메인으로</button>
@@ -164,6 +165,39 @@
             </div>
           </section>
 
+          <section class="panel design-manager-section">
+            <div class="section-toolbar">
+              <h2>보험사</h2>
+            </div>
+            <div class="insurer-create-form">
+              <label><span>보험사</span><input id="insurerCompanyInput" type="text" placeholder="예: 삼성화재" autocomplete="off" /></label>
+              <label><span>담당자</span><input id="insurerManagerInput" type="text" placeholder="예: 홍길동" autocomplete="off" /></label>
+              <label><span>사이트주소</span><input id="insurerSiteUrlInput" type="text" placeholder="https://..." autocomplete="off" /></label>
+              <label>
+                <span>브라우저</span>
+                <select id="insurerBrowserInput">
+                  <option value="default">기본</option>
+                  <option value="chrome">크롬</option>
+                  <option value="edge">엣지</option>
+                </select>
+              </label>
+              <label><span>아이디</span><input id="insurerLoginIdInput" type="text" autocomplete="off" /></label>
+              <label><span>비번</span><input id="insurerPasswordInput" type="text" autocomplete="off" /></label>
+              <button id="addDesignManagerButton" type="button">생성</button>
+            </div>
+            <p class="helper-text">이동하기는 사이트 주소를 새 탭으로 엽니다. 보안 정책상 특정 브라우저 강제 실행은 PC 설정에 따라 제한될 수 있습니다.</p>
+            <div class="insurer-order-panel" aria-label="선택한 보험사 카드 순서 변경">
+              <span id="selectedInsurerLabel">이동할 카드를 클릭하세요</span>
+              <div class="insurer-order-buttons">
+                <button class="secondary-button" id="moveSelectedInsurerTop" type="button">▲▲ 맨위</button>
+                <button class="secondary-button" id="moveSelectedInsurerUp" type="button">▲ 위</button>
+                <button class="secondary-button" id="moveSelectedInsurerDown" type="button">▼ 아래</button>
+                <button class="secondary-button" id="moveSelectedInsurerBottom" type="button">▼▼ 맨아래</button>
+              </div>
+            </div>
+            <div id="designManagerList" class="design-manager-list"></div>
+          </section>
+
           <section class="panel">
             <h2>설계 방향 선택</h2>
             <fieldset>
@@ -248,20 +282,11 @@
               </div>
             </fieldset>
             <div id="medicationDetails" class="detail-box is-hidden">
-              <div class="grid three">
-                <label>
-                  <span>질환명</span>
-                  <input id="medDisease" type="text" />
-                </label>
-                <label>
-                  <span>약물명</span>
-                  <input id="medName" type="text" />
-                </label>
-                <label>
-                  <span>복용기간</span>
-                  <input id="medPeriod" type="text" placeholder="예: 2024.01~현재" />
-                </label>
+              <div class="section-toolbar compact-toolbar">
+                <h3>복용 약물 정보</h3>
+                <button id="addMedicationButton" class="secondary-button" type="button">약물 추가</button>
               </div>
+              <div id="medicationList" class="medication-list"></div>
             </div>
           </section>
 
@@ -582,7 +607,7 @@
       </article>
     </template>
 
-    <script src="./supabase-config.js?v=20260623-multi-status"></script>
-    <script src="./script.js?v=20260623-multi-status"></script>
+    <script src="./supabase-config.js?v=20260623-insurer-ultra-compact"></script>
+    <script src="./script.js?v=20260623-insurer-ultra-compact"></script>
   </body>
 </html>
