@@ -95,6 +95,7 @@ let currentSession = null;
 let isHydratingCloud = false;
 let localMode = false;
 let activeUserId = "";
+let authSettings = null;
 
 function getCheckedValues(selector) {
   return [...document.querySelectorAll(selector)]
@@ -121,6 +122,14 @@ function normalizeRecurrence(value) {
 function normalizeNoticeStatus(recurrence, recovery) {
   if (recovery && recovery !== "완치") return recovery;
   return normalizeRecurrence(recurrence || recovery);
+}
+
+function normalizeNoticeStatuses(prefill = {}) {
+  const values = Array.isArray(prefill.statuses) ? prefill.statuses : [];
+  if (!values.length && prefill.recurrences?.length) values.push(...prefill.recurrences);
+  if (!values.length && prefill.recurrence) values.push(prefill.recurrence);
+  if (prefill.recovery) values.push(prefill.recovery);
+  return [...new Set(values.map(normalizeRecurrence).filter(Boolean))];
 }
 
 function clearFields() {
@@ -236,12 +245,23 @@ function getSupabaseConfigStatusText() {
     return "현재 상태: Supabase anon key 또는 publishable key를 입력하세요";
   }
 
+  if (authSettings?.mailer_autoconfirm === false) {
+    return "현재 상태: Supabase 이메일 확인이 켜져 있어 회원가입 불가";
+  }
+
+  if (authSettings?.external?.email === false) {
+    return "현재 상태: Supabase Email 로그인이 꺼져 있어 로그인/회원가입 불가";
+  }
+
   return `현재 상태: Supabase 연결값 로드됨 (${key.slice(0, 8)}...)`;
 }
 
 function renderConfigStatus() {
   if (configStatus) {
     configStatus.textContent = getSupabaseConfigStatusText();
+  }
+  if (signupButton && authSettings) {
+    signupButton.disabled = authSettings.mailer_autoconfirm === false || authSettings.external?.email === false;
   }
 }
 
@@ -321,7 +341,9 @@ async function supabaseJson(path, { method = "GET", body, prefer = "", authToken
 
 async function getSupabaseAuthSettings() {
   const { data, error } = await supabaseJson("/auth/v1/settings");
-  return error ? null : data;
+  authSettings = error ? null : data;
+  renderConfigStatus();
+  return authSettings;
 }
 
 function normalizeSupabaseSession(data) {
@@ -572,12 +594,18 @@ async function initializeAuthentication() {
   }
 
   supabaseClient = { mode: "rest" };
+  await getSupabaseAuthSettings();
   await handleAuthSession(readJsonStorage(cloudSessionStorageKey));
 }
 
 async function loginWithEmail(event) {
   event.preventDefault();
   if (hasSupabaseConfigValues() && !ensureSupabaseReadyForAuth()) return;
+  const settings = await getSupabaseAuthSettings();
+  if (settings?.external?.email === false) {
+    authStatus.textContent = "로그인 불가: Supabase Authentication > Providers > Email을 켜주세요.";
+    return;
+  }
 
   if (!supabaseClient) {
     await loginLocalAccount();
@@ -637,6 +665,11 @@ async function signupWithEmail() {
   authStatus.textContent = "회원가입 중...";
   try {
     const settings = await getSupabaseAuthSettings();
+    if (settings?.external?.email === false) {
+      authStatus.textContent = "회원가입 불가: Supabase Authentication > Providers > Email을 켜주세요.";
+      return;
+    }
+
     if (settings?.mailer_autoconfirm === false) {
       authStatus.textContent = "회원가입 불가: Supabase에서 이메일 확인이 켜져 있습니다. Authentication > Providers > Email에서 Confirm email을 꺼주세요.";
       return;
@@ -783,10 +816,6 @@ function addNotice(prefill = {}) {
     radio.name = `careType-${noticeId}`;
   });
 
-  card.querySelectorAll('[data-notice-field="recurrence"]').forEach((radio) => {
-    radio.name = `recurrence-${noticeId}`;
-  });
-
   card.querySelector('[data-notice-field="disease"]').value = prefill.disease ?? "";
   const dateInput = card.querySelector('[data-notice-field="date"]');
   dateInput.value = prefill.date ?? "";
@@ -802,9 +831,10 @@ function addNotice(prefill = {}) {
     if (careType) careType.checked = true;
   }
 
-  const recurrenceValue = normalizeNoticeStatus(prefill.recurrence, prefill.recovery);
-  const recurrence = card.querySelector(`[data-notice-field="recurrence"][value="${recurrenceValue}"]`);
-  if (recurrence) recurrence.checked = true;
+  normalizeNoticeStatuses(prefill).forEach((status) => {
+    const checkbox = card.querySelector(`[data-notice-status][value="${status}"]`);
+    if (checkbox) checkbox.checked = true;
+  });
 
   if (prefill.treatments?.length) {
     prefill.treatments.forEach((treatment) => {
@@ -840,6 +870,7 @@ function refreshNoticeNumbers() {
 function collectNotice(card) {
   const treatments = [...card.querySelectorAll("[data-treatment]:checked")].map((item) => item.value);
   const categories = [...card.querySelectorAll("[data-notice-category]:checked")].map((item) => item.value);
+  const statuses = [...card.querySelectorAll("[data-notice-status]:checked")].map((item) => normalizeRecurrence(item.value));
   const otherTreatment = card.querySelector("[data-treatment-other]").value.trim();
 
   if (otherTreatment) {
@@ -853,7 +884,8 @@ function collectNotice(card) {
     lastVisitDate: card.querySelector('[data-notice-field="lastVisitDate"]').value,
     visitDays: card.querySelector('[data-notice-field="visitDays"]').value.trim(),
     bodyPart: card.querySelector('[data-notice-field="bodyPart"]').value.trim(),
-    recurrence: normalizeRecurrence(selectedValue(card, '[data-notice-field="recurrence"]')),
+    statuses,
+    recurrence: statuses[0] ?? "",
     careType: selectedValue(card, '[data-notice-field="careType"]'),
     categories,
     treatments,
@@ -1238,7 +1270,9 @@ function buildNoticeLines(notices) {
     if (notice.firstVisitDate) lines.push(`* 최초 내원일: ${notice.firstVisitDate}`);
     if (notice.lastVisitDate) lines.push(`* 최종 내원일: ${notice.lastVisitDate}`);
     if (notice.bodyPart) lines.push(`* 치료부위: ${notice.bodyPart}`);
-    if (notice.recurrence) lines.push(`* ${normalizeRecurrence(notice.recurrence)}`);
+    (notice.statuses?.length ? notice.statuses : notice.recurrence ? [notice.recurrence] : []).forEach((status) => {
+      lines.push(`* ${normalizeRecurrence(status)}`);
+    });
     if (notice.categories?.length) lines.push(`* 고지 구분: ${notice.categories.join(" / ")}`);
     lines.push(`* ${notice.careType}${notice.visitDays ? ` ${notice.visitDays}일` : ""}`);
     if (notice.treatments.length) lines.push(`* ${notice.treatments.join(" / ")}`);
@@ -2031,7 +2065,7 @@ function exportExcel() {
         notice.firstVisitDate && `최초 내원일: ${notice.firstVisitDate}`,
         notice.lastVisitDate && `최종 내원일: ${notice.lastVisitDate}`,
         notice.bodyPart && `치료부위: ${notice.bodyPart}`,
-        notice.recurrence && normalizeRecurrence(notice.recurrence),
+        notice.statuses?.length ? notice.statuses.map(normalizeRecurrence).join(" / ") : notice.recurrence && normalizeRecurrence(notice.recurrence),
         notice.categories?.length && `고지 구분: ${notice.categories.join(" / ")}`,
         `${notice.careType}${notice.visitDays ? ` ${notice.visitDays}일` : ""}`,
         notice.treatments.join(" / "),

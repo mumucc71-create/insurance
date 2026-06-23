@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>보험 고객 관리용 입력 시스템</title>
-    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./styles.css?v=20260623-auth-autoconfirm" />
   </head>
   <body>
     <section id="authScreen" class="auth-screen">
@@ -413,12 +413,12 @@
         <fieldset>
           <legend>초진 / 재발 / 치료상태</legend>
           <div class="segmented six-choice">
-            <label><input type="radio" data-notice-field="recurrence" value="초진" checked /><span>초진</span></label>
-            <label><input type="radio" data-notice-field="recurrence" value="재발" /><span>재발</span></label>
-            <label><input type="radio" data-notice-field="recurrence" value="지속치료" /><span>지속치료</span></label>
-            <label><input type="radio" data-notice-field="recurrence" value="완치" /><span>완치</span></label>
-            <label><input type="radio" data-notice-field="recurrence" value="치료중" /><span>치료중</span></label>
-            <label><input type="radio" data-notice-field="recurrence" value="경과관찰" /><span>경과관찰</span></label>
+            <label><input type="checkbox" data-notice-status value="초진" /><span>초진</span></label>
+            <label><input type="checkbox" data-notice-status value="재발" /><span>재발</span></label>
+            <label><input type="checkbox" data-notice-status value="지속치료" /><span>지속치료</span></label>
+            <label><input type="checkbox" data-notice-status value="완치" /><span>완치</span></label>
+            <label><input type="checkbox" data-notice-status value="치료중" /><span>치료중</span></label>
+            <label><input type="checkbox" data-notice-status value="경과관찰" /><span>경과관찰</span></label>
           </div>
         </fieldset>
 
@@ -582,7 +582,7 @@
       </article>
     </template>
 
-    <script src="./supabase-config.js?v=20260623-auth-settings"></script>
-    <script src="./script.js?v=20260623-auth-settings"></script>
+    <script src="./supabase-config.js?v=20260623-multi-status"></script>
+    <script src="./script.js?v=20260623-multi-status"></script>
   </body>
 </html>
