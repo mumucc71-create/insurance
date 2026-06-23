@@ -7,7 +7,30 @@
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <main class="app">
+    <section id="authScreen" class="auth-screen">
+      <div class="auth-card">
+        <p class="eyebrow">Secure customer cloud</p>
+        <h1>보험 고객 관리 로그인</h1>
+        <p class="auth-description">처음에는 이름과 전화번호로 회원가입하세요. 다음부터 같은 정보로 로그인하면 작업했던 고객 목록을 모두 불러옵니다.</p>
+        <form id="authForm" class="auth-form">
+          <label>
+            <span>이름</span>
+            <input id="authName" type="text" autocomplete="name" required placeholder="홍길동" />
+          </label>
+          <label>
+            <span>내 연락처</span>
+            <input id="authPhone" type="tel" inputmode="numeric" autocomplete="tel" required placeholder="010-1234-5678" />
+          </label>
+          <div class="auth-actions">
+            <button id="loginButton" type="submit">기존 사용자 로그인</button>
+            <button id="signupButton" class="secondary-button" type="button">처음 사용자 회원가입</button>
+          </div>
+        </form>
+        <p id="authStatus" class="auth-status" role="status" aria-live="polite"></p>
+      </div>
+    </section>
+
+    <main id="appRoot" class="app is-auth-hidden">
       <section class="workspace" aria-labelledby="page-title">
         <div class="header">
           <div>
@@ -19,6 +42,7 @@
             <button id="copyCustomerManagementButton" class="secondary-button" type="button">고객정보 복사</button>
             <button id="printCustomerManagementButton" class="secondary-button" type="button">고객관리 인쇄</button>
             <button id="backToMainButton" class="secondary-button" type="button">메인으로</button>
+            <button id="logoutButton" class="danger-button" type="button">로그아웃</button>
           </div>
         </div>
 
@@ -193,7 +217,7 @@
           </section>
 
           <section class="panel">
-            <h2>중대 질환 및 약물 복용 확인</h2>
+            <h2>약물복용 확인</h2>
             <div class="check-grid">
               <label><input type="checkbox" name="majorDisease" value="암" /> 암</label>
               <label><input type="checkbox" name="majorDisease" value="뇌질환" /> 뇌질환</label>
@@ -363,7 +387,7 @@
             <input data-notice-field="disease" type="text" placeholder="예: 눈 다래끼" />
           </label>
           <label>
-            <span>진료일 <b>*</b></span>
+            <span>진료일</span>
             <input data-notice-field="date" type="date" />
           </label>
           <label>
@@ -385,11 +409,14 @@
         </div>
 
         <fieldset>
-          <legend>초진 / 1년 이내 재발 여부</legend>
-          <div class="segmented three-choice">
+          <legend>초진 / 재발 / 치료상태</legend>
+          <div class="segmented six-choice">
             <label><input type="radio" data-notice-field="recurrence" value="초진" checked /><span>초진</span></label>
-            <label><input type="radio" data-notice-field="recurrence" value="1년 이내 재발" /><span>1년 이내 재발</span></label>
-            <label><input type="radio" data-notice-field="recurrence" value="확인필요" /><span>확인필요</span></label>
+            <label><input type="radio" data-notice-field="recurrence" value="재발" /><span>재발</span></label>
+            <label><input type="radio" data-notice-field="recurrence" value="지속치료" /><span>지속치료</span></label>
+            <label><input type="radio" data-notice-field="recurrence" value="완치" /><span>완치</span></label>
+            <label><input type="radio" data-notice-field="recurrence" value="치료중" /><span>치료중</span></label>
+            <label><input type="radio" data-notice-field="recurrence" value="경과관찰" /><span>경과관찰</span></label>
           </div>
         </fieldset>
 
@@ -402,10 +429,13 @@
           </div>
         </fieldset>
 
-        <label>
-          <span>방문횟수</span>
-          <input data-notice-field="visits" type="number" min="1" value="1" />
-        </label>
+        <fieldset>
+          <legend>고지 구분</legend>
+          <div class="check-grid">
+            <label><input type="checkbox" data-notice-category value="7일 이상 치료" /> 7일 이상 치료</label>
+            <label><input type="checkbox" data-notice-category value="30일 이상 투약" /> 30일 이상 투약</label>
+          </div>
+        </fieldset>
 
         <fieldset>
           <legend>치료방법</legend>
@@ -419,15 +449,6 @@
             <label><input type="checkbox" data-treatment-other-toggle /> 기타 직접입력</label>
           </div>
           <input class="is-hidden" data-treatment-other type="text" placeholder="예: 냉동치료, 휴식 권고" />
-        </fieldset>
-
-        <fieldset>
-          <legend>완치 여부</legend>
-          <div class="segmented three-choice">
-            <label><input type="radio" data-notice-field="recovery" value="완치" checked /><span>완치</span></label>
-            <label><input type="radio" data-notice-field="recovery" value="치료중" /><span>치료중</span></label>
-            <label><input type="radio" data-notice-field="recovery" value="경과관찰" /><span>경과관찰</span></label>
-          </div>
         </fieldset>
 
         <label>
@@ -450,6 +471,8 @@
               <option value="입원">입원</option>
               <option value="입원수술">입원수술</option>
               <option value="통원수술">통원수술</option>
+              <option value="7일 이상 치료">7일 이상 치료</option>
+              <option value="30일 이상 투약">30일 이상 투약</option>
             </select>
           </label>
           <label>
@@ -482,11 +505,11 @@
           </label>
         </div>
         <fieldset>
-          <legend>초진 / 1년 이내 재발 여부</legend>
+          <legend>초진 / 재발 / 지속치료</legend>
           <div class="segmented three-choice">
             <label><input type="radio" data-five-field="recurrence" value="초진" checked /><span>초진</span></label>
-            <label><input type="radio" data-five-field="recurrence" value="1년 이내 재발" /><span>1년 이내 재발</span></label>
-            <label><input type="radio" data-five-field="recurrence" value="확인필요" /><span>확인필요</span></label>
+            <label><input type="radio" data-five-field="recurrence" value="재발" /><span>재발</span></label>
+            <label><input type="radio" data-five-field="recurrence" value="지속치료" /><span>지속치료</span></label>
           </div>
         </fieldset>
         <label>
@@ -509,6 +532,8 @@
               <option value="입원">입원</option>
               <option value="입원수술">입원수술</option>
               <option value="통원수술">통원수술</option>
+              <option value="7일 이상 치료">7일 이상 치료</option>
+              <option value="30일 이상 투약">30일 이상 투약</option>
             </select>
           </label>
           <label>
@@ -541,11 +566,11 @@
           </label>
         </div>
         <fieldset>
-          <legend>초진 / 1년 이내 재발 여부</legend>
+          <legend>초진 / 재발 / 지속치료</legend>
           <div class="segmented three-choice">
             <label><input type="radio" data-ten-field="recurrence" value="초진" checked /><span>초진</span></label>
-            <label><input type="radio" data-ten-field="recurrence" value="1년 이내 재발" /><span>1년 이내 재발</span></label>
-            <label><input type="radio" data-ten-field="recurrence" value="확인필요" /><span>확인필요</span></label>
+            <label><input type="radio" data-ten-field="recurrence" value="재발" /><span>재발</span></label>
+            <label><input type="radio" data-ten-field="recurrence" value="지속치료" /><span>지속치료</span></label>
           </div>
         </fieldset>
         <label>
@@ -555,6 +580,8 @@
       </article>
     </template>
 
-    <script src="./script.js"></script>
+    <script src="./supabase-config.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="./script.js?v=20260623-visit-days-only"></script>
   </body>
 </html>

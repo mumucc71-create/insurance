@@ -1,4 +1,12 @@
 const form = document.querySelector("#requestForm");
+const authScreen = document.querySelector("#authScreen");
+const authForm = document.querySelector("#authForm");
+const authName = document.querySelector("#authName");
+const authPhone = document.querySelector("#authPhone");
+const signupButton = document.querySelector("#signupButton");
+const authStatus = document.querySelector("#authStatus");
+const appRoot = document.querySelector("#appRoot");
+const logoutButton = document.querySelector("#logoutButton");
 const pageTitle = document.querySelector("#page-title");
 const previewTitle = document.querySelector("#preview-title");
 const openContractManagementButton = document.querySelector("#openContractManagementButton");
@@ -77,7 +85,14 @@ let tenYearIdCounter = 0;
 let contractIdCounter = 0;
 const customerStorageKey = "insuranceDisclosureCustomers";
 const autoSaveDraftKey = "insuranceDisclosureAutoSaveDraft";
+const localAccountStorageKey = "insuranceDisclosureLocalAccounts";
 let autoSaveTimer = null;
+let cloudSyncTimer = null;
+let supabaseClient = null;
+let currentSession = null;
+let isHydratingCloud = false;
+let localMode = false;
+let activeUserId = "";
 
 function getCheckedValues(selector) {
   return [...document.querySelectorAll(selector)]
@@ -93,6 +108,17 @@ function setFieldValue(key, value) {
   if (fields[key]) {
     fields[key].value = value ?? "";
   }
+}
+
+function normalizeRecurrence(value) {
+  if (value === "1년 이내 재발") return "재발";
+  if (value === "확인필요") return "지속치료";
+  return value || "초진";
+}
+
+function normalizeNoticeStatus(recurrence, recovery) {
+  if (recovery && recovery !== "완치") return recovery;
+  return normalizeRecurrence(recurrence || recovery);
 }
 
 function clearFields() {
@@ -115,16 +141,22 @@ function setCheckedValues(name, values = []) {
   });
 }
 
+function getScopedStorageKey(baseKey) {
+  const userId = currentSession?.user?.id;
+  return userId ? `${baseKey}:${userId}` : baseKey;
+}
+
 function getStoredCustomers() {
   try {
-    return JSON.parse(localStorage.getItem(customerStorageKey)) ?? [];
+    return JSON.parse(localStorage.getItem(getScopedStorageKey(customerStorageKey))) ?? [];
   } catch {
     return [];
   }
 }
 
 function setStoredCustomers(customers) {
-  localStorage.setItem(customerStorageKey, JSON.stringify(customers));
+  localStorage.setItem(getScopedStorageKey(customerStorageKey), JSON.stringify(customers));
+  scheduleCloudSync();
 }
 
 function showManagerStatus(message) {
@@ -132,6 +164,303 @@ function showManagerStatus(message) {
   window.setTimeout(() => {
     managerStatus.textContent = "";
   }, 2000);
+}
+
+function isSupabaseConfigured() {
+  const config = window.INSURANCE_APP_CONFIG ?? {};
+  return Boolean(config.supabaseUrl && config.supabaseAnonKey && window.supabase?.createClient);
+}
+
+function normalizeAuthPhone(value) {
+  return String(value ?? "").replace(/\D/g, "");
+}
+
+function normalizeAuthName(value) {
+  return String(value ?? "").replace(/\s+/g, "").toLowerCase();
+}
+
+function getPhoneAuthEmail() {
+  const phone = normalizeAuthPhone(authPhone.value);
+  return phone.length >= 10 ? `${phone}@phone.insure.local` : "";
+}
+
+function getPhoneAuthPassword() {
+  return `Insure-${normalizeAuthPhone(authPhone.value)}-${encodeURIComponent(normalizeAuthName(authName.value))}`;
+}
+
+function readJsonStorage(key, fallback = null) {
+  try {
+    return JSON.parse(localStorage.getItem(key)) ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function migrateLegacyDataToCurrentAccount() {
+  const customerKey = getScopedStorageKey(customerStorageKey);
+  const draftKey = getScopedStorageKey(autoSaveDraftKey);
+  const existingCustomers = readJsonStorage(customerKey, []);
+  const legacyCustomers = readJsonStorage(customerStorageKey, []);
+
+  if (!existingCustomers.length && legacyCustomers.length) {
+    localStorage.setItem(customerKey, JSON.stringify(legacyCustomers));
+  }
+
+  if (!localStorage.getItem(draftKey) && localStorage.getItem(autoSaveDraftKey)) {
+    localStorage.setItem(draftKey, localStorage.getItem(autoSaveDraftKey));
+  }
+}
+
+function openLocalAccount(account) {
+  localMode = true;
+  currentSession = { user: { id: account.id, name: account.name, phone: account.phone } };
+  activeUserId = account.id;
+  migrateLegacyDataToCurrentAccount();
+  showCustomerApp();
+  restoreUiFromCurrentStorage();
+}
+
+async function loginLocalAccount() {
+  const phone = normalizeAuthPhone(authPhone.value);
+  const name = normalizeAuthName(authName.value);
+  const accounts = readJsonStorage(localAccountStorageKey, []);
+  const account = accounts.find((item) => item.phone === phone && normalizeAuthName(item.name) === name);
+
+  if (!account) {
+    authStatus.textContent = "등록된 이름과 연락처를 찾지 못했습니다. 처음이면 회원가입을 눌러주세요.";
+    return;
+  }
+
+  openLocalAccount(account);
+  showManagerStatus(`${account.name}님 고객 목록을 불러왔습니다.`);
+}
+
+async function signupLocalAccount() {
+  const phone = normalizeAuthPhone(authPhone.value);
+  const name = authName.value.trim();
+  if (!name || phone.length < 10) {
+    authStatus.textContent = "이름과 연락처를 정확히 입력해주세요.";
+    return;
+  }
+
+  const accounts = readJsonStorage(localAccountStorageKey, []);
+  if (accounts.some((item) => item.phone === phone)) {
+    authStatus.textContent = "이미 가입된 연락처입니다. 로그인해주세요.";
+    return;
+  }
+
+  const account = {
+    id: `local-${phone}`,
+    name,
+    phone,
+    createdAt: new Date().toISOString(),
+  };
+  accounts.push(account);
+  localStorage.setItem(localAccountStorageKey, JSON.stringify(accounts));
+  openLocalAccount(account);
+  showManagerStatus(`${name}님 회원가입이 완료되었습니다. 고객 목록을 불러왔습니다.`);
+}
+
+function showAuthScreen(message = "") {
+  authScreen.hidden = false;
+  appRoot.classList.add("is-auth-hidden");
+  authStatus.textContent = message;
+}
+
+function showCustomerApp() {
+  authScreen.hidden = true;
+  appRoot.classList.remove("is-auth-hidden");
+}
+
+async function pushCloudSnapshot() {
+  if (!supabaseClient || !currentSession || isHydratingCloud || localMode) return;
+
+  const draft = readJsonStorage(getScopedStorageKey(autoSaveDraftKey));
+  const { error } = await supabaseClient
+    .from("insurance_app_data")
+    .upsert(
+      {
+        user_id: currentSession.user.id,
+        customers: getStoredCustomers(),
+        draft,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "user_id" },
+    );
+
+  if (error) {
+    showManagerStatus(`클라우드 저장 실패: ${error.message}`);
+  } else {
+    showManagerStatus("클라우드 자동 저장됨");
+  }
+}
+
+function scheduleCloudSync() {
+  if (!supabaseClient || !currentSession || isHydratingCloud || localMode) return;
+  window.clearTimeout(cloudSyncTimer);
+  cloudSyncTimer = window.setTimeout(pushCloudSnapshot, 1000);
+}
+
+function restoreUiFromCurrentStorage() {
+  customerSearchInput.value = "";
+  renderSavedCustomerList();
+  const restored = restoreAutoSavedDraft();
+
+  if (!restored) {
+    applyCustomerState(getEmptyCustomerState());
+  }
+
+  renderSavedCustomerList(savedCustomerSelect.value);
+  renderOutput();
+}
+
+async function hydrateFromCloud() {
+  if (!supabaseClient || !currentSession) return;
+  isHydratingCloud = true;
+
+  const userId = currentSession.user.id;
+  const { data, error } = await supabaseClient
+    .from("insurance_app_data")
+    .select("customers, draft")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) {
+    isHydratingCloud = false;
+    showManagerStatus(`클라우드 불러오기 실패: ${error.message}`);
+    restoreUiFromCurrentStorage();
+    return;
+  }
+
+  const customerKey = getScopedStorageKey(customerStorageKey);
+  const draftKey = getScopedStorageKey(autoSaveDraftKey);
+
+  if (data) {
+    localStorage.setItem(customerKey, JSON.stringify(data.customers ?? []));
+    if (data.draft) {
+      localStorage.setItem(draftKey, JSON.stringify(data.draft));
+    } else {
+      localStorage.removeItem(draftKey);
+    }
+  } else {
+    const scopedCustomers = readJsonStorage(customerKey, []);
+    const legacyCustomers = readJsonStorage(customerStorageKey, []);
+    const scopedDraft = readJsonStorage(draftKey);
+    const legacyDraft = readJsonStorage(autoSaveDraftKey);
+    localStorage.setItem(customerKey, JSON.stringify(scopedCustomers.length ? scopedCustomers : legacyCustomers));
+    const migrationDraft = scopedDraft ?? legacyDraft;
+    if (migrationDraft) localStorage.setItem(draftKey, JSON.stringify(migrationDraft));
+  }
+
+  isHydratingCloud = false;
+  restoreUiFromCurrentStorage();
+  if (!data) await pushCloudSnapshot();
+}
+
+async function handleAuthSession(session) {
+  currentSession = session;
+
+  if (!session) {
+    activeUserId = "";
+    showAuthScreen("이름과 내 연락처로 로그인해주세요.");
+    return;
+  }
+
+  showCustomerApp();
+  if (activeUserId === session.user.id) return;
+  activeUserId = session.user.id;
+  await hydrateFromCloud();
+}
+
+async function initializeAuthentication() {
+  if (!isSupabaseConfigured()) {
+    localMode = true;
+    showAuthScreen("처음이면 이름과 연락처를 입력한 뒤 회원가입을 눌러주세요.");
+    return;
+  }
+
+  const config = window.INSURANCE_APP_CONFIG;
+  supabaseClient = window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey);
+  supabaseClient.auth.onAuthStateChange((_event, session) => {
+    window.setTimeout(() => handleAuthSession(session), 0);
+  });
+  const { data, error } = await supabaseClient.auth.getSession();
+  if (error) {
+    showAuthScreen(`로그인 확인 실패: ${error.message}`);
+    return;
+  }
+  await handleAuthSession(data.session);
+}
+
+async function loginWithEmail(event) {
+  event.preventDefault();
+  if (!supabaseClient) {
+    await loginLocalAccount();
+    return;
+  }
+
+  const email = getPhoneAuthEmail();
+  const name = authName.value.trim();
+  if (!email || !name) {
+    authStatus.textContent = "이름과 연락처를 정확히 입력해주세요.";
+    return;
+  }
+
+  authStatus.textContent = "고객정보를 불러오는 중...";
+  const { error } = await supabaseClient.auth.signInWithPassword({
+    email,
+    password: getPhoneAuthPassword(),
+  });
+  authStatus.textContent = error ? "이름 또는 연락처를 확인해주세요." : "고객정보를 불러왔습니다.";
+}
+
+async function signupWithEmail() {
+  if (!supabaseClient) {
+    await signupLocalAccount();
+    return;
+  }
+
+  const phone = normalizeAuthPhone(authPhone.value);
+  const name = authName.value.trim();
+  const email = getPhoneAuthEmail();
+  if (!email || !name) {
+    authStatus.textContent = "이름과 연락처를 정확히 입력해주세요.";
+    return;
+  }
+
+  authStatus.textContent = "회원가입 중...";
+  const { data, error } = await supabaseClient.auth.signUp({
+    email,
+    password: getPhoneAuthPassword(),
+    options: {
+      data: { name, phone },
+    },
+  });
+
+  if (error) {
+    authStatus.textContent = `회원가입 실패: ${error.message}`;
+  } else if (!data.session) {
+    authStatus.textContent = "가입 확인 설정 때문에 로그인이 보류되었습니다. 관리자에게 문의해주세요.";
+  } else {
+    authStatus.textContent = "회원가입과 로그인이 완료되었습니다.";
+  }
+}
+
+async function logoutCustomerApp() {
+  window.clearTimeout(autoSaveTimer);
+  runAutoSave();
+
+  if (localMode || !supabaseClient) {
+    localMode = false;
+    currentSession = null;
+    activeUserId = "";
+    showAuthScreen("로컬 사용을 종료했습니다.");
+    return;
+  }
+
+  await pushCloudSnapshot();
+  const { error } = await supabaseClient.auth.signOut();
+  if (error) showManagerStatus(`로그아웃 실패: ${error.message}`);
 }
 
 function setContractManagementMode(enabled, updateHash = true) {
@@ -220,10 +549,6 @@ function addNotice(prefill = {}) {
     radio.name = `careType-${noticeId}`;
   });
 
-  card.querySelectorAll('[data-notice-field="recovery"]').forEach((radio) => {
-    radio.name = `recovery-${noticeId}`;
-  });
-
   card.querySelectorAll('[data-notice-field="recurrence"]').forEach((radio) => {
     radio.name = `recurrence-${noticeId}`;
   });
@@ -234,9 +559,8 @@ function addNotice(prefill = {}) {
   applyDateRange(dateInput, "threeMonth");
   setRangedDateField(card, '[data-notice-field="firstVisitDate"]', prefill.firstVisitDate ?? prefill.treatmentPeriod ?? "", "threeMonth");
   setRangedDateField(card, '[data-notice-field="lastVisitDate"]', prefill.lastVisitDate ?? "", "threeMonth");
-  card.querySelector('[data-notice-field="visitDays"]').value = prefill.visitDays ?? "";
+  card.querySelector('[data-notice-field="visitDays"]').value = prefill.visitDays ?? prefill.visits ?? "";
   card.querySelector('[data-notice-field="bodyPart"]').value = prefill.bodyPart ?? "";
-  card.querySelector('[data-notice-field="visits"]').value = prefill.visits ?? 1;
   card.querySelector('[data-notice-field="memo"]').value = prefill.memo ?? "";
 
   if (prefill.careType) {
@@ -244,19 +568,20 @@ function addNotice(prefill = {}) {
     if (careType) careType.checked = true;
   }
 
-  if (prefill.recovery) {
-    const recovery = card.querySelector(`[data-notice-field="recovery"][value="${prefill.recovery}"]`);
-    if (recovery) recovery.checked = true;
-  }
-
-  if (prefill.recurrence) {
-    const recurrence = card.querySelector(`[data-notice-field="recurrence"][value="${prefill.recurrence}"]`);
-    if (recurrence) recurrence.checked = true;
-  }
+  const recurrenceValue = normalizeNoticeStatus(prefill.recurrence, prefill.recovery);
+  const recurrence = card.querySelector(`[data-notice-field="recurrence"][value="${recurrenceValue}"]`);
+  if (recurrence) recurrence.checked = true;
 
   if (prefill.treatments?.length) {
     prefill.treatments.forEach((treatment) => {
       const checkbox = card.querySelector(`[data-treatment][value="${treatment}"]`);
+      if (checkbox) checkbox.checked = true;
+    });
+  }
+
+  if (prefill.categories?.length) {
+    prefill.categories.forEach((category) => {
+      const checkbox = card.querySelector(`[data-notice-category][value="${category}"]`);
       if (checkbox) checkbox.checked = true;
     });
   }
@@ -280,6 +605,7 @@ function refreshNoticeNumbers() {
 
 function collectNotice(card) {
   const treatments = [...card.querySelectorAll("[data-treatment]:checked")].map((item) => item.value);
+  const categories = [...card.querySelectorAll("[data-notice-category]:checked")].map((item) => item.value);
   const otherTreatment = card.querySelector("[data-treatment-other]").value.trim();
 
   if (otherTreatment) {
@@ -293,11 +619,10 @@ function collectNotice(card) {
     lastVisitDate: card.querySelector('[data-notice-field="lastVisitDate"]').value,
     visitDays: card.querySelector('[data-notice-field="visitDays"]').value.trim(),
     bodyPart: card.querySelector('[data-notice-field="bodyPart"]').value.trim(),
-    recurrence: selectedValue(card, '[data-notice-field="recurrence"]'),
+    recurrence: normalizeRecurrence(selectedValue(card, '[data-notice-field="recurrence"]')),
     careType: selectedValue(card, '[data-notice-field="careType"]'),
-    visits: card.querySelector('[data-notice-field="visits"]').value.trim() || "1",
+    categories,
     treatments,
-    recovery: selectedValue(card, '[data-notice-field="recovery"]'),
     memo: card.querySelector('[data-notice-field="memo"]').value.trim(),
   };
 }
@@ -325,10 +650,9 @@ function addFiveYearNotice(prefill = {}) {
   card.querySelector('[data-five-field="visitDays"]').value = prefill.visitDays ?? "";
   card.querySelector('[data-five-field="bodyPart"]').value = prefill.bodyPart ?? "";
   card.querySelector('[data-five-field="detail"]').value = prefill.detail ?? "";
-  if (prefill.recurrence) {
-    const recurrence = card.querySelector(`[data-five-field="recurrence"][value="${prefill.recurrence}"]`);
-    if (recurrence) recurrence.checked = true;
-  }
+  const recurrenceValue = normalizeRecurrence(prefill.recurrence);
+  const recurrence = card.querySelector(`[data-five-field="recurrence"][value="${recurrenceValue}"]`);
+  if (recurrence) recurrence.checked = true;
 
   fiveYearList.append(card);
   refreshFiveYearNumbers();
@@ -354,10 +678,9 @@ function addTenYearNotice(prefill = {}) {
   card.querySelector('[data-ten-field="visitDays"]').value = prefill.visitDays ?? "";
   card.querySelector('[data-ten-field="bodyPart"]').value = prefill.bodyPart ?? "";
   card.querySelector('[data-ten-field="detail"]').value = prefill.detail ?? "";
-  if (prefill.recurrence) {
-    const recurrence = card.querySelector(`[data-ten-field="recurrence"][value="${prefill.recurrence}"]`);
-    if (recurrence) recurrence.checked = true;
-  }
+  const recurrenceValue = normalizeRecurrence(prefill.recurrence);
+  const recurrence = card.querySelector(`[data-ten-field="recurrence"][value="${recurrenceValue}"]`);
+  if (recurrence) recurrence.checked = true;
 
   tenYearList.append(card);
   refreshTenYearNumbers();
@@ -386,7 +709,7 @@ function collectFiveYearNotice(card) {
     lastVisitDate: card.querySelector('[data-five-field="lastVisitDate"]').value,
     visitDays: card.querySelector('[data-five-field="visitDays"]').value.trim(),
     bodyPart: card.querySelector('[data-five-field="bodyPart"]').value.trim(),
-    recurrence: selectedValue(card, '[data-five-field="recurrence"]'),
+    recurrence: normalizeRecurrence(selectedValue(card, '[data-five-field="recurrence"]')),
     detail: card.querySelector('[data-five-field="detail"]').value.trim(),
   };
 }
@@ -401,7 +724,7 @@ function collectTenYearNotice(card) {
     lastVisitDate: card.querySelector('[data-ten-field="lastVisitDate"]').value,
     visitDays: card.querySelector('[data-ten-field="visitDays"]').value.trim(),
     bodyPart: card.querySelector('[data-ten-field="bodyPart"]').value.trim(),
-    recurrence: selectedValue(card, '[data-ten-field="recurrence"]'),
+    recurrence: normalizeRecurrence(selectedValue(card, '[data-ten-field="recurrence"]')),
     detail: card.querySelector('[data-ten-field="detail"]').value.trim(),
   };
 }
@@ -675,16 +998,17 @@ function buildNoticeLines(notices) {
 
   notices.forEach((notice, index) => {
     lines.push("", `${index + 1}. ${notice.disease || "병명 미입력"}`, "");
-    if (notice.date) lines.push(`* ${notice.date}`);
+    if (notice.date) {
+      lines.push(`* ${notice.date}`);
+    }
     if (notice.firstVisitDate) lines.push(`* 최초 내원일: ${notice.firstVisitDate}`);
     if (notice.lastVisitDate) lines.push(`* 최종 내원일: ${notice.lastVisitDate}`);
-    if (notice.visitDays) lines.push(`* 병원 간 일수: ${notice.visitDays}일`);
     if (notice.bodyPart) lines.push(`* 치료부위: ${notice.bodyPart}`);
-    if (notice.recurrence) lines.push(`* 초진/재발: ${notice.recurrence}`);
-    lines.push(`* ${notice.careType} ${notice.visits}회`);
+    if (notice.recurrence) lines.push(`* ${normalizeRecurrence(notice.recurrence)}`);
+    if (notice.categories?.length) lines.push(`* 고지 구분: ${notice.categories.join(" / ")}`);
+    lines.push(`* ${notice.careType}${notice.visitDays ? ` ${notice.visitDays}일` : ""}`);
     if (notice.treatments.length) lines.push(`* ${notice.treatments.join(" / ")}`);
     if (notice.memo) lines.push(`* ${notice.memo}`);
-    lines.push(`* ${notice.recovery}`);
   });
 
   return lines;
@@ -705,7 +1029,7 @@ function buildFiveYearLines() {
     if (item.lastVisitDate) lines.push(`* 최종 내원일: ${item.lastVisitDate}`);
     if (item.visitDays) lines.push(`* 병원 간 일수: ${item.visitDays}일`);
     if (item.bodyPart) lines.push(`* 치료부위: ${item.bodyPart}`);
-    if (item.recurrence) lines.push(`* 초진/재발: ${item.recurrence}`);
+    if (item.recurrence) lines.push(`* ${normalizeRecurrence(item.recurrence)}`);
     if (item.detail) lines.push(`* ${item.detail}`);
     if (item.state) lines.push(`* 현재상태: ${item.state}`);
   });
@@ -728,7 +1052,7 @@ function buildTenYearLines() {
     if (item.lastVisitDate) lines.push(`* 최종 내원일: ${item.lastVisitDate}`);
     if (item.visitDays) lines.push(`* 병원 간 일수: ${item.visitDays}일`);
     if (item.bodyPart) lines.push(`* 치료부위: ${item.bodyPart}`);
-    if (item.recurrence) lines.push(`* 초진/재발: ${item.recurrence}`);
+    if (item.recurrence) lines.push(`* ${normalizeRecurrence(item.recurrence)}`);
     if (item.detail) lines.push(`* ${item.detail}`);
     if (item.state) lines.push(`* 현재상태: ${item.state}`);
   });
@@ -740,7 +1064,7 @@ function buildMedicationLine() {
   const medication = collectMedication();
 
   if (medication.status !== "yes") {
-    return "약물 복용 없음";
+    return "";
   }
 
   const details = [medication.disease, medication.name, medication.period]
@@ -758,7 +1082,11 @@ function buildMajorDiseaseLine() {
     diseases.push(other);
   }
 
-  return diseases.length ? `중대질환 확인: ${diseases.join(", ")}` : "중대질환 해당 없음";
+  return diseases.length ? `약물복용 확인: ${diseases.join(", ")}` : "";
+}
+
+function buildMajorDiseaseAndMedicationLines() {
+  return [buildMajorDiseaseLine(), buildMedicationLine()].filter(Boolean);
 }
 
 function collectDesignDirection() {
@@ -920,6 +1248,7 @@ function buildOutput({ insurerMode = false } = {}) {
   const contractLines = buildContractLines();
   const comparisonLines = buildComparisonLines();
   const requestText = joinRequestItems();
+  const majorMedicationLines = buildMajorDiseaseAndMedicationLines();
 
   lines.push(...buildBasicInfoLines({ insurerMode }), "");
 
@@ -947,7 +1276,13 @@ function buildOutput({ insurerMode = false } = {}) {
     lines.push("설계 요청사항 없음", "");
   }
 
-  lines.push("4. 고지", "", buildMajorDiseaseLine(), buildMedicationLine(), "", ...buildNoticeLines(collectNotices()), "", ...buildFiveYearLines(), "", ...buildTenYearLines());
+  lines.push("4. 고지", "");
+
+  if (majorMedicationLines.length) {
+    lines.push(...majorMedicationLines, "");
+  }
+
+  lines.push(...buildNoticeLines(collectNotices()), "", ...buildFiveYearLines(), "", ...buildTenYearLines());
 
   return lines.join("\n");
 }
@@ -960,7 +1295,6 @@ function validateForm() {
 
   notices.forEach((notice, index) => {
     if (!notice.disease) warnings.push(`${index + 1}번 고지사항의 병명을 입력해주세요.`);
-    if (!notice.date) warnings.push(`${index + 1}번 고지사항의 진료일을 선택해주세요.`);
   });
 
   if (collectMedication().status === "yes") {
@@ -1146,13 +1480,14 @@ function renderSavedCustomerList(selectedId = "") {
 
 function saveAutoDraft(state = collectCustomerState()) {
   localStorage.setItem(
-    autoSaveDraftKey,
+    getScopedStorageKey(autoSaveDraftKey),
     JSON.stringify({
       selectedId: savedCustomerSelect.value,
       updatedAt: new Date().toISOString(),
       state,
     }),
   );
+  scheduleCloudSync();
 }
 
 function upsertAutoSavedCustomer(state) {
@@ -1210,7 +1545,7 @@ function scheduleAutoSave() {
 
 function restoreAutoSavedDraft() {
   try {
-    const draft = JSON.parse(localStorage.getItem(autoSaveDraftKey));
+    const draft = JSON.parse(localStorage.getItem(getScopedStorageKey(autoSaveDraftKey)));
 
     if (!draft?.state) {
       return false;
@@ -1319,13 +1654,14 @@ function deleteSelectedCustomer() {
   }
 
   setStoredCustomers(customers.filter((item) => item.id !== selectedId));
-  localStorage.removeItem(autoSaveDraftKey);
+  localStorage.removeItem(getScopedStorageKey(autoSaveDraftKey));
+  scheduleCloudSync();
   renderSavedCustomerList();
   showManagerStatus("저장 정보가 삭제되었습니다.");
 }
 
-function startNewCustomer() {
-  const emptyState = {
+function getEmptyCustomerState() {
+  return {
     fields: {},
     designDirection: {},
     majorDisease: {},
@@ -1338,11 +1674,16 @@ function startNewCustomer() {
     contracts: [{}],
     comparison: [],
   };
+}
+
+function startNewCustomer() {
+  const emptyState = getEmptyCustomerState();
 
   applyCustomerState(emptyState);
   savedCustomerSelect.value = "";
   customerSearchInput.value = "";
-  localStorage.removeItem(autoSaveDraftKey);
+  localStorage.removeItem(getScopedStorageKey(autoSaveDraftKey));
+  scheduleCloudSync();
   renderSavedCustomerList();
   showManagerStatus("새 고객 입력 화면으로 초기화했습니다.");
 }
@@ -1413,9 +1754,18 @@ function exportExcel() {
     ["이메일", getFieldValue("email")],
     ["추가 요청사항", splitLines(fields.requestItems.value).join(", ")],
     ["설계 방향", buildDesignDirectionLines().join("\n")],
-    ["중대질환", buildMajorDiseaseLine()],
-    ["약 복용", buildMedicationLine()],
   ];
+
+  const majorDiseaseLine = buildMajorDiseaseLine();
+  const medicationLine = buildMedicationLine();
+
+  if (majorDiseaseLine) {
+    rows.push(["약물복용 확인", majorDiseaseLine]);
+  }
+
+  if (medicationLine) {
+    rows.push(["약 복용", medicationLine]);
+  }
 
   collectContracts().forEach((contract, index) => {
     const details = [
@@ -1446,12 +1796,11 @@ function exportExcel() {
         notice.date,
         notice.firstVisitDate && `최초 내원일: ${notice.firstVisitDate}`,
         notice.lastVisitDate && `최종 내원일: ${notice.lastVisitDate}`,
-        notice.visitDays && `병원 간 일수: ${notice.visitDays}일`,
         notice.bodyPart && `치료부위: ${notice.bodyPart}`,
-        notice.recurrence && `초진/재발: ${notice.recurrence}`,
-        `${notice.careType} ${notice.visits}회`,
+        notice.recurrence && normalizeRecurrence(notice.recurrence),
+        notice.categories?.length && `고지 구분: ${notice.categories.join(" / ")}`,
+        `${notice.careType}${notice.visitDays ? ` ${notice.visitDays}일` : ""}`,
         notice.treatments.join(" / "),
-        notice.recovery,
         notice.memo,
       ]
         .filter(Boolean)
@@ -1471,7 +1820,7 @@ function exportExcel() {
           item.lastVisitDate && `최종 내원일: ${item.lastVisitDate}`,
           item.visitDays && `병원 간 일수: ${item.visitDays}일`,
           item.bodyPart && `치료부위: ${item.bodyPart}`,
-          item.recurrence && `초진/재발: ${item.recurrence}`,
+          item.recurrence && normalizeRecurrence(item.recurrence),
           item.detail,
           item.state,
         ].filter(Boolean).join(" / "),
@@ -1493,7 +1842,7 @@ function exportExcel() {
           item.lastVisitDate && `최종 내원일: ${item.lastVisitDate}`,
           item.visitDays && `병원 간 일수: ${item.visitDays}일`,
           item.bodyPart && `치료부위: ${item.bodyPart}`,
-          item.recurrence && `초진/재발: ${item.recurrence}`,
+          item.recurrence && normalizeRecurrence(item.recurrence),
           item.detail,
           item.state,
         ].filter(Boolean).join(" / "),
@@ -1623,6 +1972,17 @@ addTenYearButton.addEventListener("click", () => {
   addTenYearNotice();
   scheduleAutoSave();
 });
+authForm.addEventListener("submit", loginWithEmail);
+signupButton.addEventListener("click", signupWithEmail);
+logoutButton.addEventListener("click", logoutCustomerApp);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden" && !appRoot.classList.contains("is-auth-hidden")) {
+    window.clearTimeout(autoSaveTimer);
+    runAutoSave();
+    pushCloudSnapshot();
+  }
+});
+window.addEventListener("online", scheduleCloudSync);
 saveCustomerButton.addEventListener("click", saveCurrentCustomer);
 loadCustomerButton.addEventListener("click", loadSelectedCustomer);
 newCustomerButton.addEventListener("click", startNewCustomer);
@@ -1671,23 +2031,6 @@ pdfButton.addEventListener("click", () => {
   window.print();
 });
 
-renderSavedCustomerList();
-setContractManagementMode(window.location.hash === "#contracts", false);
-const didRestoreAutoSave = restoreAutoSavedDraft();
-
-if (!didRestoreAutoSave) {
-  addContract();
-  addNotice({
-    disease: "",
-    date: "",
-    careType: "통원",
-    visits: "",
-    treatments: ["약처방"],
-    recovery: "완치",
-  });
-}
-
 excelButton.addEventListener("click", exportExcel);
-
-renderSavedCustomerList(savedCustomerSelect.value);
-renderOutput();
+setContractManagementMode(window.location.hash === "#contracts", false);
+initializeAuthentication();

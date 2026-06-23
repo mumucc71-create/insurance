@@ -30,6 +30,71 @@ body {
   color: var(--text);
 }
 
+.is-auth-hidden {
+  display: none !important;
+}
+
+.auth-screen {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 24px;
+  background: var(--bg);
+}
+
+.auth-screen[hidden] {
+  display: none;
+}
+
+.auth-card {
+  width: min(440px, 100%);
+  padding: 28px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 18px 48px rgba(23, 32, 27, 0.12);
+}
+
+.auth-description {
+  margin: 10px 0 20px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.auth-form {
+  display: grid;
+  gap: 14px;
+}
+
+.auth-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.auth-actions button {
+  width: 100%;
+}
+
+.text-button {
+  width: 100%;
+  margin-top: 12px;
+  border: 1px solid var(--line);
+  background: #ffffff;
+  color: var(--accent-dark);
+}
+
+.text-button:hover {
+  background: var(--surface-strong);
+}
+
+.auth-status {
+  min-height: 22px;
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-weight: 700;
+}
+
 button,
 input,
 select,
@@ -409,6 +474,10 @@ textarea:focus,
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.segmented.six-choice {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .segmented.price-choice {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
@@ -597,6 +666,7 @@ textarea:focus,
   .comparison-row,
   .check-grid,
   .segmented.three-choice,
+  .segmented.six-choice,
   .segmented.price-choice,
   .action-bar {
     grid-template-columns: 1fr;
