@@ -95,7 +95,6 @@ let currentSession = null;
 let isHydratingCloud = false;
 let localMode = false;
 let activeUserId = "";
-const nativeFetch = window.fetch.bind(window);
 
 function getCheckedValues(selector) {
   return [...document.querySelectorAll(selector)]
@@ -320,6 +319,11 @@ async function supabaseJson(path, { method = "GET", body, prefer = "", authToken
   });
 }
 
+async function getSupabaseAuthSettings() {
+  const { data, error } = await supabaseJson("/auth/v1/settings");
+  return error ? null : data;
+}
+
 function normalizeSupabaseSession(data) {
   const session = data?.session ?? data;
   const user = data?.user ?? session?.user;
@@ -341,65 +345,6 @@ function saveCloudSession(session) {
     localStorage.removeItem(cloudSessionStorageKey);
   }
 }
-
-function getFetchBody(input, init) {
-  if (Object.prototype.hasOwnProperty.call(init, "body")) return init.body;
-  if (input instanceof Request) return input.body;
-  return undefined;
-}
-
-function getFetchMethod(input, init) {
-  return init.method || (input instanceof Request ? input.method : undefined);
-}
-
-function getHeaderValue(headers, name) {
-  if (!headers) return "";
-  if (headers instanceof Headers) return headers.get(name) ?? "";
-  const foundKey = Object.keys(headers).find((key) => key.toLowerCase() === name.toLowerCase());
-  return foundKey ? headers[foundKey] : "";
-}
-
-function createSupabaseFetch() {
-  return (input, init = {}) => {
-    const prefer = getHeaderValue(init.headers, "Prefer");
-    return nativeFetch(getFetchUrl(input), {
-      method: getFetchMethod(input, init),
-      body: getFetchBody(input, init),
-      credentials: init.credentials,
-      signal: init.signal,
-      headers: buildSupabaseHeaders(prefer === "return=representation" ? prefer : ""),
-    });
-  };
-}
-
-function getFetchUrl(input) {
-  if (typeof input === "string") return input;
-  if (input instanceof URL) return input.href;
-  return input?.url ?? "";
-}
-
-function installSupabaseFetchGuard() {
-  window.fetch = (input, init = {}) => {
-    const config = window.INSURANCE_APP_CONFIG ?? {};
-    const requestUrl = getFetchUrl(input);
-    const isSupabaseRequest = config.supabaseUrl && requestUrl.startsWith(config.supabaseUrl);
-
-    if (!isSupabaseRequest) {
-      return nativeFetch(input, init);
-    }
-
-    const prefer = getHeaderValue(init.headers, "Prefer");
-    return nativeFetch(requestUrl, {
-      method: getFetchMethod(input, init),
-      body: getFetchBody(input, init),
-      credentials: init.credentials,
-      signal: init.signal,
-      headers: buildSupabaseHeaders(prefer === "return=representation" ? prefer : ""),
-    });
-  };
-}
-
-installSupabaseFetchGuard();
 
 function normalizeAuthPhone(value) {
   return String(value ?? "").replace(/\D/g, "");
@@ -657,7 +602,7 @@ async function loginWithEmail(event) {
       },
     });
     if (error) {
-      authStatus.textContent = "이름 또는 연락처를 확인해주세요.";
+      authStatus.textContent = `로그인 실패: ${error.message}`;
       return;
     }
 
@@ -691,6 +636,12 @@ async function signupWithEmail() {
 
   authStatus.textContent = "회원가입 중...";
   try {
+    const settings = await getSupabaseAuthSettings();
+    if (settings?.mailer_autoconfirm === false) {
+      authStatus.textContent = "회원가입 불가: Supabase에서 이메일 확인이 켜져 있습니다. Authentication > Providers > Email에서 Confirm email을 꺼주세요.";
+      return;
+    }
+
     const { data, error } = await supabaseJson("/auth/v1/signup", {
       method: "POST",
       body: {
@@ -702,6 +653,9 @@ async function signupWithEmail() {
 
     if (error) {
       authStatus.textContent = `회원가입 실패: ${error.message}`;
+      return;
+    }
+
     const session = normalizeSupabaseSession(data);
 
     if (!session) {
