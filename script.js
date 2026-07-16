@@ -971,11 +971,11 @@ function loadPhoneConsultationById(id) {
     showPhoneConsultationStatus("저장된 메모를 찾지 못했습니다.");
     return;
   }
+  if (phoneConsultationCommonTemplateInput) {
+    phoneConsultationCommonTemplateInput.value = memo.content || "";
+  }
+  setStoredPhoneConsultationCommonTemplate(memo.content || "");
   if (memo.source === "common-template") {
-    if (phoneConsultationCommonTemplateInput) {
-      phoneConsultationCommonTemplateInput.value = memo.content || "";
-    }
-    setStoredPhoneConsultationCommonTemplate(memo.content || "");
     appendPhoneConsultationMemoContent(memo.content, `"${memo.title || "공통 양식"}" 내용을 아래에 추가했습니다.`);
     renderPhoneConsultationMemoButtons(activePhoneConsultationId);
     return;

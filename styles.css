@@ -197,7 +197,6 @@ body.design-manager-mode #openDesignManagerButton,
 body.phone-consultation-mode #requestForm > .panel:not(.phone-consultation-section),
 body.phone-consultation-mode #phoneConsultationButton,
 body.design-manager-mode .customer-manager,
-body.phone-consultation-mode .customer-manager,
 body.contract-management-mode .preview,
 body.phone-consultation-mode .preview {
   display: none;
