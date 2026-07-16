@@ -260,6 +260,10 @@ body.promotion-mode .app {
   border-bottom: 1px solid rgba(43, 92, 143, 0.12);
 }
 
+#phoneConsultationCommonTemplateInput {
+  min-height: 260px;
+}
+
 .phone-consultation-memo-field {
   margin-bottom: 10px;
 }
