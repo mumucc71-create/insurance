@@ -186,7 +186,8 @@ button:disabled:hover {
 body:not(.contract-management-mode) .contract-management-section,
 body:not(.design-manager-mode) .design-manager-section,
 body:not(.phone-consultation-mode) .phone-consultation-section,
-body:not(.contract-management-mode):not(.design-manager-mode):not(.phone-consultation-mode) #backToMainButton {
+body:not(.promotion-mode) .promotion-section,
+body:not(.contract-management-mode):not(.design-manager-mode):not(.phone-consultation-mode):not(.promotion-mode) #backToMainButton {
   display: none;
 }
 
@@ -196,9 +197,12 @@ body.design-manager-mode #requestForm > .panel:not(.design-manager-section),
 body.design-manager-mode #openDesignManagerButton,
 body.phone-consultation-mode #requestForm > .panel:not(.phone-consultation-section),
 body.phone-consultation-mode #phoneConsultationButton,
+body.promotion-mode #requestForm > .panel:not(.promotion-section),
+body.promotion-mode #promotionButton,
 body.design-manager-mode .customer-manager,
 body.contract-management-mode .preview,
-body.phone-consultation-mode .preview {
+body.phone-consultation-mode .preview,
+body.promotion-mode .preview {
   display: none;
 }
 
@@ -208,9 +212,36 @@ body.design-manager-mode .preview {
 
 body.contract-management-mode .app,
 body.design-manager-mode .app,
-body.phone-consultation-mode .app {
+body.phone-consultation-mode .app,
+body.promotion-mode .app {
   grid-template-columns: minmax(0, 1fr);
   width: min(1280px, calc(100% - 32px));
+}
+
+.header {
+  align-items: flex-start;
+  gap: 12px;
+}
+
+#page-title {
+  margin-bottom: 4px;
+  font-size: clamp(1.35rem, 2.2vw, 2rem);
+  line-height: 1.2;
+}
+
+.view-navigation {
+  align-items: center;
+}
+
+.promotion-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.promotion-form label:last-of-type {
+  grid-column: 1 / -1;
 }
 
 .phone-consultation-common-template {
@@ -247,13 +278,27 @@ body.phone-consultation-mode .app {
   border-radius: 999px;
   background: #ffffff;
   color: var(--text);
+  cursor: grab;
   font-weight: 700;
+}
+
+.phone-consultation-memo-button:active {
+  cursor: grabbing;
 }
 
 .phone-consultation-memo-button:hover,
 .phone-consultation-memo-button.is-selected {
   border-color: var(--accent);
   background: #f5fbf7;
+}
+
+.phone-consultation-memo-button.is-dragging {
+  opacity: 0.45;
+}
+
+.phone-consultation-memo-button.is-drop-target {
+  border-color: var(--focus);
+  box-shadow: 0 0 0 3px rgba(217, 155, 43, 0.18);
 }
 
 .phone-consultation-memo-empty {
@@ -1003,6 +1048,7 @@ textarea:focus,
   .design-manager-row,
   .insurer-card-edit,
   .insurer-create-form,
+  .promotion-form,
   .design-manager-list,
   .medication-row,
   .check-grid,

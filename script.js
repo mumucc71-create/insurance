@@ -15,6 +15,7 @@ const previewTitle = document.querySelector("#preview-title");
 const openContractManagementButton = document.querySelector("#openContractManagementButton");
 const openDesignManagerButton = document.querySelector("#openDesignManagerButton");
 const phoneConsultationButton = document.querySelector("#phoneConsultationButton");
+const promotionButton = document.querySelector("#promotionButton");
 const phoneConsultationMemoList = document.querySelector("#phoneConsultationMemoList");
 const phoneConsultationTitleInput = document.querySelector("#phoneConsultationTitleInput");
 const phoneConsultationMemoInput = document.querySelector("#phoneConsultationMemoInput");
@@ -25,6 +26,14 @@ const deletePhoneConsultationButton = document.querySelector("#deletePhoneConsul
 const phoneConsultationCommonTemplateInput = document.querySelector("#phoneConsultationCommonTemplateInput");
 const savePhoneConsultationCommonTemplateButton = document.querySelector("#savePhoneConsultationCommonTemplateButton");
 const insertPhoneConsultationCommonTemplateButton = document.querySelector("#insertPhoneConsultationCommonTemplateButton");
+const promotionChannelInput = document.querySelector("#promotionChannelInput");
+const promotionTopicInput = document.querySelector("#promotionTopicInput");
+const promotionImageInput = document.querySelector("#promotionImageInput");
+const promotionMemoInput = document.querySelector("#promotionMemoInput");
+const generatePromotionButton = document.querySelector("#generatePromotionButton");
+const copyPromotionButton = document.querySelector("#copyPromotionButton");
+const promotionOutput = document.querySelector("#promotionOutput");
+const promotionStatus = document.querySelector("#promotionStatus");
 const backToMainButton = document.querySelector("#backToMainButton");
 const output = document.querySelector("#customerCopyText") || document.querySelector("#output");
 const universeFileUploadButton = document.querySelector("#universeFileUploadButton");
@@ -124,9 +133,14 @@ const localSessionStorageKey = "insuranceDisclosureLocalSession";
 const designManagerStorageKey = "insuranceDesignManagers";
 const phoneConsultationStorageKey = "insurancePhoneConsultationMemos";
 const phoneConsultationCommonTemplateStorageKey = "insurancePhoneConsultationCommonTemplate";
+const phoneConsultationDraftStorageKey = "insurancePhoneConsultationDrafts";
+const phoneConsultationOrderStorageKey = "insurancePhoneConsultationOrders";
 const deletedCustomersStorageKey = "insuranceDisclosureDeletedCustomers";
 const uiSessionStorageKey = "insuranceDisclosureUiSession";
 let activePhoneConsultationId = "";
+let activePhoneConsultationCustomerId = "";
+let draggedPhoneConsultationMemoId = "";
+let phoneConsultationMemoDragMoved = false;
 let autoSaveTimer = null;
 let cloudSyncTimer = null;
 let supabaseClient = null;
@@ -239,6 +253,8 @@ function mergeDraftSnapshots(...drafts) {
         Array.isArray(latest?.phoneConsultationMemos) ? latest.phoneConsultationMemos : [],
       ),
       phoneConsultationCommonTemplate: latest?.phoneConsultationCommonTemplate ?? oldest?.phoneConsultationCommonTemplate ?? "",
+      phoneConsultationDrafts: mergePhoneConsultationRecordMap(oldest?.phoneConsultationDrafts, latest?.phoneConsultationDrafts),
+      phoneConsultationOrders: mergePhoneConsultationRecordMap(oldest?.phoneConsultationOrders, latest?.phoneConsultationOrders),
       universeDisclosureText: latest?.universeDisclosureText || oldest?.universeDisclosureText || "",
       medicalAnalysisJson: latest?.medicalAnalysisJson ?? oldest?.medicalAnalysisJson ?? null,
       updatedAt: latest?.updatedAt || oldest?.updatedAt || new Date().toISOString(),
@@ -476,6 +492,7 @@ function setStoredCustomers(customers) {
 }
 
 function getCurrentViewMode() {
+  if (document.body.classList.contains("promotion-mode")) return "promotion";
   if (document.body.classList.contains("phone-consultation-mode")) return "phone";
   if (document.body.classList.contains("design-manager-mode")) return "insurers";
   if (document.body.classList.contains("contract-management-mode")) return "contracts";
@@ -505,6 +522,7 @@ function getRememberedUiSession() {
 
 function getInitialViewMode() {
   if (window.location.hash === "#phone-consultation") return "phone";
+  if (window.location.hash === "#promotion") return "promotion";
   if (window.location.hash === "#insurers" || window.location.hash === "#design-manager") return "insurers";
   if (window.location.hash === "#contracts") return "contracts";
   return getRememberedUiSession().viewMode || "main";
@@ -514,6 +532,8 @@ function restoreRememberedViewMode() {
   const mode = getInitialViewMode();
   if (mode === "phone") {
     setPhoneConsultationMode(true);
+  } else if (mode === "promotion") {
+    setPromotionMode(true);
   } else if (mode === "insurers") {
     setDesignManagerMode(true);
   } else if (mode === "contracts") {
@@ -817,6 +837,7 @@ function showCurrentAccountInfo() {
 }
 
 function getMainPageTitle() {
+  if (document.body.classList.contains("promotion-mode")) return "홍보";
   if (document.body.classList.contains("phone-consultation-mode")) return "전화상담";
   if (document.body.classList.contains("contract-management-mode")) return "계약 및 보험사 비교 관리";
   if (document.body.classList.contains("design-manager-mode")) return "보험사";
@@ -889,6 +910,92 @@ function setStoredPhoneConsultationCommonTemplate(content) {
   localStorage.setItem(getScopedStorageKey(phoneConsultationCommonTemplateStorageKey), JSON.stringify(String(content ?? "")));
 }
 
+function getPhoneConsultationCustomerKey(customerId = activePhoneConsultationCustomerId || savedCustomerSelect?.value || "") {
+  return customerId || "__new_customer__";
+}
+
+function getStoredPhoneConsultationDrafts() {
+  const drafts = readJsonStorage(getScopedStorageKey(phoneConsultationDraftStorageKey), {});
+  return drafts && typeof drafts === "object" && !Array.isArray(drafts) ? drafts : {};
+}
+
+function setStoredPhoneConsultationDrafts(drafts) {
+  localStorage.setItem(getScopedStorageKey(phoneConsultationDraftStorageKey), JSON.stringify(drafts && typeof drafts === "object" ? drafts : {}));
+}
+
+function getStoredPhoneConsultationOrders() {
+  const orders = readJsonStorage(getScopedStorageKey(phoneConsultationOrderStorageKey), {});
+  return orders && typeof orders === "object" && !Array.isArray(orders) ? orders : {};
+}
+
+function setStoredPhoneConsultationOrders(orders) {
+  localStorage.setItem(getScopedStorageKey(phoneConsultationOrderStorageKey), JSON.stringify(orders && typeof orders === "object" ? orders : {}));
+}
+
+function mergePhoneConsultationRecordMap(...maps) {
+  const merged = {};
+  maps.filter((map) => map && typeof map === "object" && !Array.isArray(map)).forEach((map) => {
+    Object.entries(map).forEach(([key, value]) => {
+      if (!value || typeof value !== "object") return;
+      const previousTime = new Date(merged[key]?.updatedAt || 0).getTime();
+      const valueTime = new Date(value.updatedAt || 0).getTime();
+      if (!merged[key] || valueTime >= previousTime) {
+        merged[key] = value;
+      }
+    });
+  });
+  return merged;
+}
+
+function savePhoneConsultationDraftForCustomer(customerId = activePhoneConsultationCustomerId || savedCustomerSelect?.value || "") {
+  const key = getPhoneConsultationCustomerKey(customerId);
+  const drafts = getStoredPhoneConsultationDrafts();
+  drafts[key] = {
+    title: phoneConsultationTitleInput?.value ?? "",
+    memo: phoneConsultationMemoInput?.value ?? "",
+    commonTemplate: phoneConsultationCommonTemplateInput?.value ?? getStoredPhoneConsultationCommonTemplate(),
+    activeMemoId: activePhoneConsultationId,
+    updatedAt: new Date().toISOString(),
+  };
+  setStoredPhoneConsultationDrafts(drafts);
+}
+
+function restorePhoneConsultationDraftForCustomer(customerId = savedCustomerSelect?.value || "") {
+  const key = getPhoneConsultationCustomerKey(customerId);
+  const draft = getStoredPhoneConsultationDrafts()[key];
+  activePhoneConsultationCustomerId = key;
+  if (!draft) {
+    activePhoneConsultationId = "";
+    if (phoneConsultationTitleInput) phoneConsultationTitleInput.value = "";
+    if (phoneConsultationMemoInput) phoneConsultationMemoInput.value = "";
+    renderPhoneConsultationCommonTemplate();
+    renderPhoneConsultationMemoButtons();
+    return;
+  }
+
+  activePhoneConsultationId = draft.activeMemoId || "";
+  if (phoneConsultationTitleInput) phoneConsultationTitleInput.value = draft.title || "";
+  if (phoneConsultationMemoInput) phoneConsultationMemoInput.value = draft.memo || "";
+  if (phoneConsultationCommonTemplateInput) phoneConsultationCommonTemplateInput.value = draft.commonTemplate || getStoredPhoneConsultationCommonTemplate();
+  renderPhoneConsultationMemoButtons(activePhoneConsultationId);
+}
+
+function getPhoneConsultationOrderForCustomer(customerId = savedCustomerSelect?.value || activePhoneConsultationCustomerId || "") {
+  const key = getPhoneConsultationCustomerKey(customerId);
+  const order = getStoredPhoneConsultationOrders()[key]?.ids;
+  return Array.isArray(order) ? order : [];
+}
+
+function savePhoneConsultationOrderForCustomer(ids, customerId = savedCustomerSelect?.value || activePhoneConsultationCustomerId || "") {
+  const key = getPhoneConsultationCustomerKey(customerId);
+  const orders = getStoredPhoneConsultationOrders();
+  orders[key] = {
+    ids: Array.isArray(ids) ? ids : [],
+    updatedAt: new Date().toISOString(),
+  };
+  setStoredPhoneConsultationOrders(orders);
+}
+
 function renderPhoneConsultationCommonTemplate() {
   if (phoneConsultationCommonTemplateInput) {
     phoneConsultationCommonTemplateInput.value = getStoredPhoneConsultationCommonTemplate();
@@ -924,6 +1031,7 @@ function savePhoneConsultationCommonTemplateAsMemo(content) {
       title,
       content,
       source: "common-template",
+      sortOrder: getNextPhoneConsultationSortOrder(memos),
       createdAt: now,
       updatedAt: now,
     });
@@ -935,6 +1043,7 @@ function savePhoneConsultationCommonTemplateAsMemo(content) {
 function savePhoneConsultationCommonTemplate() {
   const content = phoneConsultationCommonTemplateInput?.value ?? "";
   setStoredPhoneConsultationCommonTemplate(content);
+  savePhoneConsultationDraftForCustomer();
   const result = savePhoneConsultationCommonTemplateAsMemo(content);
   renderPhoneConsultationMemoButtons();
   scheduleCloudSync();
@@ -965,6 +1074,7 @@ function appendPhoneConsultationMemoContent(content, message = "내용을 메모
   phoneConsultationMemoInput.focus();
   phoneConsultationMemoInput.selectionStart = phoneConsultationMemoInput.value.length;
   phoneConsultationMemoInput.selectionEnd = phoneConsultationMemoInput.value.length;
+  savePhoneConsultationDraftForCustomer();
   showPhoneConsultationStatus(message);
 }
 
@@ -989,8 +1099,40 @@ function formatPhoneConsultationSavedAt(value) {
   });
 }
 
-function sortPhoneConsultationMemos(memos) {
-  return [...memos].sort((left, right) => new Date(right.updatedAt || right.createdAt || 0) - new Date(left.updatedAt || left.createdAt || 0));
+function sortPhoneConsultationMemos(memos, orderIds = []) {
+  const orderMap = new Map(orderIds.map((id, index) => [id, index]));
+  return [...memos].sort((left, right) => {
+    const leftSavedOrder = orderMap.has(left.id) ? orderMap.get(left.id) : null;
+    const rightSavedOrder = orderMap.has(right.id) ? orderMap.get(right.id) : null;
+    if (leftSavedOrder !== null && rightSavedOrder !== null && leftSavedOrder !== rightSavedOrder) {
+      return leftSavedOrder - rightSavedOrder;
+    }
+    if (leftSavedOrder !== null && rightSavedOrder === null) return -1;
+    if (leftSavedOrder === null && rightSavedOrder !== null) return 1;
+
+    const leftOrder = Number.isFinite(Number(left.sortOrder)) ? Number(left.sortOrder) : null;
+    const rightOrder = Number.isFinite(Number(right.sortOrder)) ? Number(right.sortOrder) : null;
+    if (leftOrder !== null && rightOrder !== null && leftOrder !== rightOrder) {
+      return leftOrder - rightOrder;
+    }
+    if (leftOrder !== null && rightOrder === null) return -1;
+    if (leftOrder === null && rightOrder !== null) return 1;
+    return new Date(right.updatedAt || right.createdAt || 0) - new Date(left.updatedAt || left.createdAt || 0);
+  });
+}
+
+function getNextPhoneConsultationSortOrder(memos) {
+  return memos.reduce((maxOrder, memo, index) => {
+    const order = Number.isFinite(Number(memo.sortOrder)) ? Number(memo.sortOrder) : index;
+    return Math.max(maxOrder, order);
+  }, -1) + 1;
+}
+
+function getOrderedPhoneConsultationMemos(customerId = savedCustomerSelect?.value || activePhoneConsultationCustomerId || "") {
+  return sortPhoneConsultationMemos(
+    recoverPhoneConsultationMemosToCurrentAccount(),
+    getPhoneConsultationOrderForCustomer(customerId),
+  );
 }
 
 function mergePhoneConsultationMemos(...memoLists) {
@@ -1028,12 +1170,28 @@ function persistPhoneConsultationCloudDataFromDraft(draft) {
     }
   }
 
+  if (draft.phoneConsultationDrafts && typeof draft.phoneConsultationDrafts === "object") {
+    setStoredPhoneConsultationDrafts(mergePhoneConsultationRecordMap(
+      getStoredPhoneConsultationDrafts(),
+      draft.phoneConsultationDrafts,
+    ));
+    changed = true;
+  }
+
+  if (draft.phoneConsultationOrders && typeof draft.phoneConsultationOrders === "object") {
+    setStoredPhoneConsultationOrders(mergePhoneConsultationRecordMap(
+      getStoredPhoneConsultationOrders(),
+      draft.phoneConsultationOrders,
+    ));
+    changed = true;
+  }
+
   return changed;
 }
 
 function renderPhoneConsultationMemoButtons(selectedId = activePhoneConsultationId) {
   if (!phoneConsultationMemoList) return;
-  const memos = sortPhoneConsultationMemos(recoverPhoneConsultationMemosToCurrentAccount());
+  const memos = getOrderedPhoneConsultationMemos();
   phoneConsultationMemoList.innerHTML = "";
 
   if (!memos.length) {
@@ -1050,6 +1208,8 @@ function renderPhoneConsultationMemoButtons(selectedId = activePhoneConsultation
     button.className = "phone-consultation-memo-button";
     if (memo.id === selectedId) button.classList.add("is-selected");
     button.dataset.memoId = memo.id;
+    button.draggable = true;
+    button.title = "마우스로 끌어서 순서를 바꿀 수 있습니다.";
     button.textContent = memo.title || "제목 없음";
     phoneConsultationMemoList.append(button);
   });
@@ -1060,6 +1220,23 @@ function clearPhoneConsultationForm() {
   if (phoneConsultationTitleInput) phoneConsultationTitleInput.value = "";
   if (phoneConsultationMemoInput) phoneConsultationMemoInput.value = "";
   renderPhoneConsultationMemoButtons();
+}
+
+function reorderPhoneConsultationMemos(draggedId, targetId) {
+  if (!draggedId || !targetId || draggedId === targetId) return;
+
+  const memos = getOrderedPhoneConsultationMemos();
+  const draggedIndex = memos.findIndex((memo) => memo.id === draggedId);
+  const targetIndex = memos.findIndex((memo) => memo.id === targetId);
+  if (draggedIndex < 0 || targetIndex < 0) return;
+
+  const [draggedMemo] = memos.splice(draggedIndex, 1);
+  memos.splice(targetIndex, 0, draggedMemo);
+  savePhoneConsultationOrderForCustomer(memos.map((memo) => memo.id));
+
+  renderPhoneConsultationMemoButtons(activePhoneConsultationId);
+  scheduleCloudSync();
+  showPhoneConsultationStatus("저장된 메모 순서를 바꿨습니다.");
 }
 
 function loadPhoneConsultationById(id) {
@@ -1080,6 +1257,7 @@ function loadPhoneConsultationById(id) {
   activePhoneConsultationId = memo.id;
   if (phoneConsultationTitleInput) phoneConsultationTitleInput.value = memo.title || "";
   if (phoneConsultationMemoInput) phoneConsultationMemoInput.value = memo.content || "";
+  savePhoneConsultationDraftForCustomer();
   renderPhoneConsultationMemoButtons(memo.id);
   showPhoneConsultationStatus("메모를 불러왔습니다.");
 }
@@ -1111,6 +1289,7 @@ function savePhoneConsultationMemo() {
       id: activePhoneConsultationId,
       title,
       content,
+      sortOrder: getNextPhoneConsultationSortOrder(memos),
       createdAt: now,
       updatedAt: now,
     });
@@ -1143,20 +1322,143 @@ function deletePhoneConsultationMemo() {
   showPhoneConsultationStatus("메모를 삭제했습니다.");
 }
 
+function showPromotionStatus(message) {
+  if (!promotionStatus) return;
+  promotionStatus.textContent = message;
+  window.setTimeout(() => {
+    promotionStatus.textContent = "";
+  }, 2500);
+}
+
+function getPromotionImageHint() {
+  const file = promotionImageInput?.files?.[0];
+  if (!file) return "";
+  return file.name
+    .replace(/\.[^.]+$/, "")
+    .replace(/[_-]+/g, " ")
+    .trim();
+}
+
+function buildPromotionCopy() {
+  const channel = promotionChannelInput?.value || "blog";
+  const topic = promotionTopicInput?.value.trim() || getPromotionImageHint() || "보험 점검";
+  const memo = promotionMemoInput?.value.trim();
+  const imageHint = getPromotionImageHint();
+  const memoLine = memo ? `\n\n추가 포인트: ${memo}` : "";
+  const imageLine = imageHint ? `\n이미지 참고 키워드: ${imageHint}` : "";
+
+  if (channel === "instagram") {
+    return [
+      `${topic}, 그냥 지나치고 계신가요?`,
+      "",
+      `보험은 가입보다 점검이 더 중요할 때가 많습니다. 이미 가입한 보장 안에서도 놓친 청구, 부족한 진단비, 중복된 특약이 생길 수 있어요.`,
+      "",
+      `오늘은 ${topic}을 기준으로 내 보험이 지금 상황에 맞는지 가볍게 확인해보세요.`,
+      "",
+      "✔ 가입한 보장이 현재 생활에 맞는지",
+      "✔ 청구하지 못한 보험금은 없는지",
+      "✔ 보험료 대비 꼭 필요한 보장이 남아있는지",
+      "",
+      "궁금하신 분은 편하게 문의 주세요. 상황에 맞춰 차분히 확인해드릴게요.",
+      memoLine,
+      imageLine,
+      "",
+      "#보험점검 #숨은보험금 #보험상담 #진단비 #실손보험 #보험리모델링 #보험청구",
+    ].filter(Boolean).join("\n");
+  }
+
+  if (channel === "kin") {
+    return [
+      `질문: ${topic} 관련해서 보험을 어떻게 확인하면 좋을까요?`,
+      "",
+      "답변:",
+      `${topic}은 단순히 가입 여부만 보는 것보다 현재 보장 내용과 실제 청구 가능성을 함께 확인하는 것이 좋습니다.`,
+      "",
+      "확인 순서는 보통 다음과 같습니다.",
+      "1. 현재 가입한 보험의 보장 항목 확인",
+      "2. 진단비, 수술비, 입원비, 실손 등 필요한 항목 구분",
+      "3. 중복 보장이나 부족한 보장 확인",
+      "4. 최근 병력이나 청구 이력에 따른 제한 사항 확인",
+      "",
+      "특히 보험금 청구는 약관과 진단명, 치료 내용에 따라 달라질 수 있으니 서류를 기준으로 확인하는 것이 안전합니다.",
+      "",
+      "정확한 판단은 가입증권과 약관, 병원 서류를 함께 보고 확인해보시는 것을 권해드립니다.",
+      memoLine,
+      imageLine,
+    ].filter(Boolean).join("\n");
+  }
+
+  return [
+    `[${topic}] 내 보험, 지금 제대로 준비되어 있을까요?`,
+    "",
+    `보험은 한 번 가입했다고 끝나는 것이 아니라, 시간이 지나면서 상황에 맞게 점검이 필요합니다. 특히 ${topic}처럼 실제 생활과 연결되는 부분은 놓치기 쉽습니다.`,
+    "",
+    "많은 분들이 이런 부분에서 헷갈려 하십니다.",
+    "",
+    "- 내가 받을 수 있는 보험금을 놓치고 있지는 않은지",
+    "- 진단비와 수술비가 현재 기준에 부족하지는 않은지",
+    "- 보험료는 계속 내고 있는데 필요한 보장은 빠져 있지 않은지",
+    "- 예전에 가입한 보험이 지금 상황에도 맞는지",
+    "",
+    `그래서 ${topic}을 기준으로 현재 가입 내용을 한 번 정리해보는 것이 좋습니다. 가입증권, 최근 병원 이력, 청구 가능 항목을 함께 보면 불필요한 중복은 줄이고 필요한 보장은 더 선명하게 확인할 수 있습니다.`,
+    "",
+    "보험 점검은 무조건 새로 가입하는 과정이 아닙니다. 이미 가지고 있는 보장을 제대로 이해하고, 필요한 부분만 보완하는 것이 먼저입니다.",
+    "",
+    "궁금하신 내용이 있다면 현재 가입 내용 기준으로 차분하게 확인해드리겠습니다.",
+    memoLine,
+    imageLine,
+  ].filter(Boolean).join("\n");
+}
+
+function generatePromotionCopy() {
+  if (!promotionOutput) return;
+  promotionOutput.value = buildPromotionCopy();
+  showPromotionStatus("홍보 글 초안을 작성했습니다.");
+}
+
+function copyPromotionCopy() {
+  const text = promotionOutput?.value.trim();
+  if (!text) {
+    showPromotionStatus("먼저 글을 작성해주세요.");
+    return;
+  }
+  copyText(text, "홍보 글 복사 완료");
+  showPromotionStatus("홍보 글을 복사했습니다.");
+}
+
 function openPhoneConsultation() {
   setPhoneConsultationMode(true);
+}
+
+function openPromotion() {
+  setPromotionMode(true);
 }
 
 function setPhoneConsultationMode(enabled, updateHash = true) {
   document.body.classList.toggle("phone-consultation-mode", enabled);
   if (enabled) {
-    document.body.classList.remove("contract-management-mode", "design-manager-mode");
+    document.body.classList.remove("contract-management-mode", "design-manager-mode", "promotion-mode");
     renderPhoneConsultationMemoButtons(activePhoneConsultationId);
     renderPhoneConsultationCommonTemplate();
+    restorePhoneConsultationDraftForCustomer(savedCustomerSelect?.value || "");
   }
   if (pageTitle) pageTitle.textContent = getMainPageTitle();
   if (updateHash) {
     const nextUrl = enabled ? "#phone-consultation" : window.location.pathname + window.location.search;
+    window.history.replaceState(null, "", nextUrl);
+  }
+  rememberUiSession({ viewMode: getCurrentViewMode() });
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function setPromotionMode(enabled, updateHash = true) {
+  document.body.classList.toggle("promotion-mode", enabled);
+  if (enabled) {
+    document.body.classList.remove("contract-management-mode", "design-manager-mode", "phone-consultation-mode");
+  }
+  if (pageTitle) pageTitle.textContent = getMainPageTitle();
+  if (updateHash) {
+    const nextUrl = enabled ? "#promotion" : window.location.pathname + window.location.search;
     window.history.replaceState(null, "", nextUrl);
   }
   rememberUiSession({ viewMode: getCurrentViewMode() });
@@ -1559,6 +1861,7 @@ async function pushCloudSnapshot() {
   }
 
   setSyncStatus("저장 중");
+  savePhoneConsultationDraftForCustomer();
   let { row: latestCloudRow, error: fetchError } = await fetchCloudSnapshot();
   if (fetchError) {
     latestCloudRow = null;
@@ -1577,6 +1880,8 @@ async function pushCloudSnapshot() {
   const latestPhoneMemos = Array.isArray(latestCloudRow?.draft?.phoneConsultationMemos) ? latestCloudRow.draft.phoneConsultationMemos : [];
   const mergedPhoneMemos = mergePhoneConsultationMemos(latestPhoneMemos, getStoredPhoneConsultationMemos());
   const phoneTemplate = getStoredPhoneConsultationCommonTemplate();
+  const phoneDrafts = getStoredPhoneConsultationDrafts();
+  const phoneOrders = getStoredPhoneConsultationOrders();
 
   console.info("[sync] 저장 직전 서버 최신 customers 개수", latestCloudCustomers.length);
   console.info("[sync] 저장 직전 로컬 캐시 customers 개수", localCustomers.length);
@@ -1596,6 +1901,8 @@ async function pushCloudSnapshot() {
       designManagers: mergedDesignManagers,
       phoneConsultationMemos: mergedPhoneMemos,
       phoneConsultationCommonTemplate: phoneTemplate,
+      phoneConsultationDrafts: phoneDrafts,
+      phoneConsultationOrders: phoneOrders,
       universeDisclosureText,
       medicalAnalysisJson,
     },
@@ -1606,6 +1913,8 @@ async function pushCloudSnapshot() {
     designManagers: mergedDesignManagers,
     phoneConsultationMemos: mergedPhoneMemos,
     phoneConsultationCommonTemplate: phoneTemplate,
+    phoneConsultationDrafts: phoneDrafts,
+    phoneConsultationOrders: phoneOrders,
     universeDisclosureText,
     medicalAnalysisJson,
   };
@@ -1696,6 +2005,7 @@ function restoreUiFromCurrentStorage() {
 
   renderSavedCustomerList(savedCustomerSelect.value);
   renderOutput();
+  restorePhoneConsultationDraftForCustomer(savedCustomerSelect.value);
   restoreRememberedViewMode();
 
   if (!localMode && hasCloudHydrated && recovery.recoveredCustomerCount > 0) {
@@ -2097,7 +2407,7 @@ async function logoutCustomerApp() {
 function setContractManagementMode(enabled, updateHash = true) {
   document.body.classList.toggle("contract-management-mode", enabled);
   if (enabled) {
-    document.body.classList.remove("design-manager-mode", "phone-consultation-mode");
+    document.body.classList.remove("design-manager-mode", "phone-consultation-mode", "promotion-mode");
   }
   if (pageTitle) pageTitle.textContent = getMainPageTitle();
 
@@ -2113,7 +2423,7 @@ function setContractManagementMode(enabled, updateHash = true) {
 function setDesignManagerMode(enabled, updateHash = true) {
   document.body.classList.toggle("design-manager-mode", enabled);
   if (enabled) {
-    document.body.classList.remove("contract-management-mode", "phone-consultation-mode");
+    document.body.classList.remove("contract-management-mode", "phone-consultation-mode", "promotion-mode");
     renderDesignManagers();
   }
   if (pageTitle) pageTitle.textContent = getMainPageTitle();
@@ -2131,6 +2441,7 @@ function goMainMode() {
   setContractManagementMode(false, false);
   setDesignManagerMode(false, false);
   setPhoneConsultationMode(false, false);
+  setPromotionMode(false, false);
   window.history.replaceState(null, "", window.location.pathname + window.location.search);
   rememberUiSession({ viewMode: "main" });
 }
@@ -5354,6 +5665,8 @@ function saveAutoDraft(state = collectCustomerState()) {
       designManagers: getStoredDesignManagers(),
       phoneConsultationMemos: getStoredPhoneConsultationMemos(),
       phoneConsultationCommonTemplate: getStoredPhoneConsultationCommonTemplate(),
+      phoneConsultationDrafts: getStoredPhoneConsultationDrafts(),
+      phoneConsultationOrders: getStoredPhoneConsultationOrders(),
       universeDisclosureText,
       medicalAnalysisJson,
     }),
@@ -5473,6 +5786,7 @@ function saveCurrentCustomer() {
 }
 
 function loadCustomerById(selectedId) {
+  savePhoneConsultationDraftForCustomer();
   const customer = getStoredCustomers().find((item) => item.id === selectedId);
 
   if (!customer) {
@@ -5484,6 +5798,7 @@ function loadCustomerById(selectedId) {
   applyCustomerState(customer.state);
   savedCustomerSelect.value = selectedId;
   rememberUiSession({ selectedId });
+  restorePhoneConsultationDraftForCustomer(selectedId);
   showManagerStatus("고객 정보를 불러왔습니다.");
 }
 
@@ -5555,6 +5870,7 @@ function getEmptyCustomerState() {
 }
 
 function startNewCustomer() {
+  savePhoneConsultationDraftForCustomer();
   const emptyState = getEmptyCustomerState();
 
   applyCustomerState(emptyState);
@@ -5563,6 +5879,7 @@ function startNewCustomer() {
   customerSearchInput.value = "";
   localStorage.removeItem(getScopedStorageKey(autoSaveDraftKey));
   rememberUiSession({ selectedId: "" });
+  restorePhoneConsultationDraftForCustomer("");
   renderSavedCustomerList();
   showManagerStatus("새 고객 입력 화면입니다. 기존 서버 데이터는 유지됩니다.");
 }
@@ -5938,11 +6255,53 @@ function bindApplicationUiEvents() {
     scheduleAutoSave();
   });
   safeOn(phoneConsultationButton, "click", openPhoneConsultation);
+  safeOn(promotionButton, "click", openPromotion);
   safeOn(savePhoneConsultationButton, "click", savePhoneConsultationMemo);
   safeOn(phoneConsultationMemoList, "click", (event) => {
+    if (phoneConsultationMemoDragMoved) {
+      phoneConsultationMemoDragMoved = false;
+      return;
+    }
     const button = event.target.closest("[data-memo-id]");
     if (!button) return;
     loadPhoneConsultationById(button.dataset.memoId);
+  });
+  safeOn(phoneConsultationMemoList, "dragstart", (event) => {
+    const button = event.target.closest("[data-memo-id]");
+    if (!button) return;
+    draggedPhoneConsultationMemoId = button.dataset.memoId;
+    phoneConsultationMemoDragMoved = true;
+    button.classList.add("is-dragging");
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", draggedPhoneConsultationMemoId);
+  });
+  safeOn(phoneConsultationMemoList, "dragover", (event) => {
+    const button = event.target.closest("[data-memo-id]");
+    if (!button || !draggedPhoneConsultationMemoId || button.dataset.memoId === draggedPhoneConsultationMemoId) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    button.classList.add("is-drop-target");
+  });
+  safeOn(phoneConsultationMemoList, "dragleave", (event) => {
+    const button = event.target.closest("[data-memo-id]");
+    button?.classList.remove("is-drop-target");
+  });
+  safeOn(phoneConsultationMemoList, "drop", (event) => {
+    const button = event.target.closest("[data-memo-id]");
+    if (!button) return;
+    event.preventDefault();
+    button.classList.remove("is-drop-target");
+    const draggedId = event.dataTransfer.getData("text/plain") || draggedPhoneConsultationMemoId;
+    reorderPhoneConsultationMemos(draggedId, button.dataset.memoId);
+  });
+  safeOn(phoneConsultationMemoList, "dragend", () => {
+    phoneConsultationMemoList.querySelectorAll(".is-dragging, .is-drop-target").forEach((button) => {
+      button.classList.remove("is-dragging", "is-drop-target");
+    });
+    draggedPhoneConsultationMemoId = "";
+    window.setTimeout(() => {
+      phoneConsultationMemoDragMoved = false;
+    }, 50);
   });
   safeOn(newPhoneConsultationButton, "click", () => {
     clearPhoneConsultationForm();
@@ -5952,6 +6311,11 @@ function bindApplicationUiEvents() {
   safeOn(deletePhoneConsultationButton, "click", deletePhoneConsultationMemo);
   safeOn(savePhoneConsultationCommonTemplateButton, "click", savePhoneConsultationCommonTemplate);
   safeOn(insertPhoneConsultationCommonTemplateButton, "click", insertPhoneConsultationCommonTemplate);
+  safeOn(phoneConsultationTitleInput, "input", () => savePhoneConsultationDraftForCustomer());
+  safeOn(phoneConsultationMemoInput, "input", () => savePhoneConsultationDraftForCustomer());
+  safeOn(phoneConsultationCommonTemplateInput, "input", () => savePhoneConsultationDraftForCustomer());
+  safeOn(generatePromotionButton, "click", generatePromotionCopy);
+  safeOn(copyPromotionButton, "click", copyPromotionCopy);
   safeOn(logoutButton, "click", logoutCustomerApp);
   safeOn(window, "online", scheduleCloudSync);
   safeOn(saveCustomerButton, "click", () => {
@@ -6005,6 +6369,7 @@ function bindApplicationUiEvents() {
   setContractManagementMode(window.location.hash === "#contracts", false);
   setDesignManagerMode(window.location.hash === "#insurers" || window.location.hash === "#design-manager", false);
   setPhoneConsultationMode(window.location.hash === "#phone-consultation", false);
+  setPromotionMode(window.location.hash === "#promotion", false);
 }
 
 try {

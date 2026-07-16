@@ -45,6 +45,7 @@
             <button id="openContractManagementButton" type="button">계약/보험사 비교 관리</button>
             <button id="openDesignManagerButton" type="button">보험사</button>
             <button id="phoneConsultationButton" class="secondary-button" type="button">전화상담</button>
+            <button id="promotionButton" class="secondary-button" type="button">홍보</button>
             <button id="backToMainButton" class="secondary-button" type="button">메인으로</button>
             <button id="logoutButton" class="danger-button" type="button">로그아웃</button>
           </div>
@@ -245,6 +246,44 @@
               <button id="savePhoneConsultationButton" type="button">저장</button>
             </div>
             <p id="phoneConsultationStatus" class="manager-status" role="status" aria-live="polite"></p>
+          </section>
+
+          <section class="panel promotion-section" aria-labelledby="promotion-title">
+            <div class="section-toolbar">
+              <h2 id="promotion-title">홍보 글 자동작성</h2>
+            </div>
+            <p class="helper-text">네이버 블로그, 인스타그램, 네이버 지식인에 맞춰 보험 관련 홍보 글 초안을 만듭니다. 과장 표현 없이 상담 유도형으로 작성됩니다.</p>
+            <div class="promotion-form">
+              <label>
+                <span>채널 선택</span>
+                <select id="promotionChannelInput">
+                  <option value="blog">네이버블로그</option>
+                  <option value="instagram">인스타그램</option>
+                  <option value="kin">네이버 지식인</option>
+                </select>
+              </label>
+              <label>
+                <span>주제</span>
+                <input id="promotionTopicInput" type="text" placeholder="예: 숨은 보험금 찾기, 진단비 점검, 실손 청구" autocomplete="off" />
+              </label>
+              <label>
+                <span>이미지 업로드</span>
+                <input id="promotionImageInput" type="file" accept="image/*" />
+              </label>
+              <label>
+                <span>추가 포인트</span>
+                <textarea id="promotionMemoInput" rows="4" placeholder="강조하고 싶은 내용, 대상 고객, 상담 문구 등을 적어주세요"></textarea>
+              </label>
+              <div class="manager-actions">
+                <button id="generatePromotionButton" type="button">글 작성</button>
+                <button id="copyPromotionButton" class="secondary-button" type="button">복사</button>
+              </div>
+            </div>
+            <label>
+              <span>작성된 글</span>
+              <textarea id="promotionOutput" rows="18" placeholder="글 작성 버튼을 누르면 여기에 홍보 글이 생성됩니다."></textarea>
+            </label>
+            <p id="promotionStatus" class="manager-status" role="status" aria-live="polite"></p>
           </section>
 
           <section class="panel">
