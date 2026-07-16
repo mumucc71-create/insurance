@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>보험 고객 관리용 입력 시스템</title>
-    <link rel="stylesheet" href="./styles.css?v=20260716-promotion-options" />
+    <link rel="stylesheet" href="./styles.css?v=20260716-both-split" />
   </head>
   <body>
     <section id="authScreen" class="auth-screen">
@@ -257,7 +257,7 @@
             <div class="section-toolbar">
               <h2 id="promotion-title">홍보 글 자동작성</h2>
             </div>
-            <p class="helper-text">네이버 블로그, 인스타그램, 네이버 지식인에 맞춰 보험 관련 홍보 글 초안을 만듭니다. 과장 표현 없이 상담 유도형으로 작성됩니다.</p>
+            <p class="helper-text">네이버 블로그, 인스타그램, 네이버 지식인, 당근, 유튜브 쇼츠, 릴스에 맞춰 보험 관련 AI 명령어를 만듭니다.</p>
             <div class="promotion-form">
               <label>
                 <span>채널 선택</span>
@@ -265,6 +265,9 @@
                   <option value="blog">네이버블로그</option>
                   <option value="instagram">인스타그램</option>
                   <option value="kin">네이버 지식인</option>
+                  <option value="carrot">당근</option>
+                  <option value="youtube_shorts">유튜브 쇼츠</option>
+                  <option value="reels">릴스</option>
                 </select>
               </label>
               <label>
@@ -291,13 +294,9 @@
                 <span>원하는 댓글</span>
                 <input id="promotionCommentInput" type="text" placeholder="예: 저도 참여합니다 / 쪽지 보냈습니다" autocomplete="off" />
               </label>
-              <label>
-                <span>이미지 업로드</span>
-                <input id="promotionImageInput" type="file" accept="image/*" />
-              </label>
               <div class="promotion-image-tools">
                 <label>
-                  <span>이미지 크롭</span>
+                  <span>이미지 자르기</span>
                   <select id="promotionCropAspectInput">
                     <option value="original">원본 비율</option>
                     <option value="1:1">정사각형 1:1</option>
@@ -307,49 +306,103 @@
                   </select>
                 </label>
                 <label>
-                  <span>사진에 넣을 이름</span>
-                  <input id="promotionImageNameInput" type="text" placeholder="예: 홍길동 팀장" autocomplete="off" />
+                  <span class="promotion-message-title">사진에 넣을 메시지 <button id="stampPromotionImageButton" class="secondary-button promotion-inline-message-button" type="button">메시지 넣기</button><button id="removeStampPromotionImageButton" class="secondary-button promotion-inline-message-button" type="button">메시지 빼기</button></span>
+                  <textarea id="promotionImageMessageInput" rows="3" placeholder="예: 홍길동 팀장&#10;010-0000-0000&#10;상담 문의 주세요"></textarea>
                 </label>
-                <label>
-                  <span>사진에 넣을 연락처</span>
-                  <input id="promotionImagePhoneInput" type="text" placeholder="예: 010-0000-0000" autocomplete="off" />
-                </label>
-                <div class="promotion-image-actions">
-                  <button id="cropPromotionImageButton" class="secondary-button" type="button">크롭</button>
-                  <button id="stampPromotionImageButton" class="secondary-button" type="button">이름/연락처 넣기</button>
-                  <button id="downloadPromotionImageButton" class="secondary-button" type="button" disabled>크롭 이미지 저장</button>
+                <div class="promotion-search-tools">
+                  <label>
+                    <span>홍보이미지 검색</span>
+                    <input id="promotionSearchInput" type="text" placeholder="예: 숨은 보험금 찾기 카드뉴스" autocomplete="off" />
+                  </label>
+                  <div class="promotion-image-actions">
+                    <button id="promotionNaverSearchButton" class="secondary-button" type="button">네이버 이미지 검색</button>
+                    <button id="promotionPinterestSearchButton" class="secondary-button" type="button">핀터레스트 검색</button>
+                    <button id="promotionGoogleSearchButton" class="secondary-button" type="button">구글 이미지 검색</button>
+                  </div>
                 </div>
-                <div class="promotion-image-preview">
+                <div class="promotion-image-actions">
+                  <span class="promotion-toolbar-label">이미지 도구바</span>
+                  <label class="promotion-toolbar-field promotion-toolbar-file-field">
+                    <span>이미지</span>
+                    <input id="promotionImageInput" type="file" accept="image/*" />
+                  </label>
+                  <button id="splitPromotionImageButton" class="secondary-button promotion-add-tool-button" type="button">쪼개기</button>
+                  <label class="promotion-toolbar-field">
+                    <span>색상</span>
+                    <input id="promotionToolColorInput" type="color" value="#39a95b" />
+                  </label>
+                  <label class="promotion-toolbar-field">
+                    <span>투명도</span>
+                    <input id="promotionToolOpacityInput" type="range" min="0" max="100" value="70" />
+                  </label>
+                  <button id="saveEditedPromotionImageButton" class="secondary-button" type="button">이미지 저장</button>
+                  <span class="promotion-toolbar-break" aria-hidden="true"></span>
+                  <button id="resetPromotionImageButton" class="secondary-button" type="button">원본으로</button>
+                  <button id="undoPromotionImageButton" class="secondary-button" type="button">뒤로가기</button>
+                </div>
+                <div class="promotion-image-preview" id="promotionScreenshotPasteZone" tabindex="0">
+                  <span class="promotion-paste-hint">여기를 클릭하고 Ctrl+V로 스크린샷 붙여넣기</span>
                   <img id="promotionImagePreview" alt="업로드 이미지 미리보기" hidden />
                   <canvas id="promotionCropCanvas" hidden></canvas>
                 </div>
-              </div>
-              <div class="promotion-search-tools">
-                <label>
-                  <span>홍보 이미지/글감 검색</span>
-                  <input id="promotionSearchInput" type="text" placeholder="예: 숨은 보험금 찾기 카드뉴스" autocomplete="off" />
-                </label>
-                <div class="promotion-image-actions">
-                  <button id="promotionNaverSearchButton" class="secondary-button" type="button">네이버 검색</button>
-                  <button id="promotionPinterestSearchButton" class="secondary-button" type="button">핀터레스트 검색</button>
+                <div class="promotion-saved-images">
+                  <span class="promotion-saved-label">저장된 이미지 — 사진을 눌러 다시 불러오세요</span>
+                  <div id="promotionSavedImageList" class="promotion-saved-list" aria-live="polite"></div>
                 </div>
               </div>
-              <label>
-                <span>추가 포인트</span>
-                <textarea id="promotionMemoInput" rows="4" placeholder="강조하고 싶은 내용, 대상 고객, 상담 문구 등을 적어주세요"></textarea>
-              </label>
+              <div class="promotion-case-tools">
+                <span class="promotion-saved-label">사례 입력</span>
+                <div class="promotion-case-grid">
+                  <label><span>누가</span><input id="promotionCaseWhoInput" type="text" placeholder="예: 40대 여성 고객" /></label>
+                  <label><span>언제</span><input id="promotionCaseWhenInput" type="text" placeholder="예: 2026년 7월" /></label>
+                  <label><span>어디서</span><input id="promotionCaseWhereInput" type="text" placeholder="예: 병원 진단 후" /></label>
+                  <label><span>어떻게</span><input id="promotionCaseHowInput" type="text" placeholder="예: 증권 점검 중 발견" /></label>
+                  <label><span>얼마</span><input id="promotionCaseAmountInput" type="text" placeholder="예: 약 120만원" /></label>
+                  <label><span>사건내용</span><textarea id="promotionCaseDetailInput" rows="3" placeholder="사례 내용을 자세히 적어주세요"></textarea></label>
+                </div>
+                <div class="promotion-image-actions">
+                  <button id="generatePromotionCaseButton" class="secondary-button" type="button">사례 글로 풀기</button>
+                  <button id="savePromotionCaseButton" class="secondary-button" type="button">사례 저장</button>
+                  <button id="copyPromotionCaseButton" class="secondary-button" type="button">사례 복사</button>
+                </div>
+                <textarea id="promotionCaseOutput" rows="7" placeholder="사례 글로 풀기 버튼을 누르면 여기에 문장으로 정리됩니다."></textarea>
+                <div id="promotionCaseList" class="promotion-saved-list" aria-live="polite"></div>
+              </div>
+              <div class="promotion-idea-tools">
+                <span class="promotion-saved-label">글감 구하기</span>
+                <label>
+                  <span>블로그 링크</span>
+                  <input id="promotionIdeaUrlInput" type="url" placeholder="블로그 글 주소를 붙여넣으세요" autocomplete="off" />
+                </label>
+                <div class="promotion-image-actions">
+                  <button id="extractPromotionBlogButton" class="secondary-button" type="button">블로그 글 추출</button>
+                </div>
+                <label>
+                  <span>추출된 글</span>
+                  <textarea id="promotionIdeaTextInput" rows="8" placeholder="블로그 링크나 이미지에서 추출한 글이 여기에 표시됩니다."></textarea>
+                </label>
+                <label>
+                  <span>이미지에서 글씨 추출</span>
+                  <input id="promotionIdeaImageInput" type="file" accept="image/*" />
+                </label>
+                <div class="promotion-image-actions">
+                  <button id="extractPromotionImageTextButton" class="secondary-button" type="button">이미지 글씨 추출</button>
+                  <button id="savePromotionIdeaButton" class="secondary-button" type="button">글감 저장</button>
+                </div>
+                <div id="promotionIdeaList" class="promotion-saved-list promotion-idea-list" aria-live="polite"></div>
+              </div>
               <div class="manager-actions">
-                <button id="generatePromotionButton" type="button">글 작성</button>
+                <button id="generatePromotionButton" type="button">AI 명령어 만들기</button>
                 <button id="copyPromotionButton" class="secondary-button" type="button">복사</button>
                 <button id="savePromotionButton" class="secondary-button" type="button">저장</button>
               </div>
             </div>
             <label>
-              <span>작성된 글</span>
-              <textarea id="promotionOutput" rows="18" placeholder="글 작성 버튼을 누르면 여기에 홍보 글이 생성됩니다."></textarea>
+              <span>AI 명령어</span>
+              <textarea id="promotionOutput" rows="18" placeholder="AI 명령어 만들기 버튼을 누르면 사례와 블로그 글감을 바탕으로 한 요청문이 생성됩니다."></textarea>
             </label>
             <div class="promotion-saved-posts">
-              <span class="promotion-saved-label">저장된 홍보글</span>
+              <span class="promotion-saved-label">저장된 AI 명령어</span>
               <div id="promotionSavedList" class="promotion-saved-list" aria-live="polite"></div>
             </div>
             <p id="promotionStatus" class="manager-status" role="status" aria-live="polite"></p>
@@ -769,7 +822,7 @@
     <script src="./supabase-config.js?v=20260625-insurer-type-colors"></script>
     <script src="./disease-code-db.js?v=20260713-universe-disclosure"></script>
     <script src="./auth-boot.js?v=20260716-promotion-nav"></script>
-    <script src="./script.js?v=20260716-promotion-options"></script>
+    <script src="./script.js?v=20260716-both-split"></script>
     <script defer src="./pdf.min.js?v=3.11.174"></script>
   </body>
 </html>

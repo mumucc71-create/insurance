@@ -33,22 +33,77 @@ const promotionTopicInput = document.querySelector("#promotionTopicInput");
 const promotionCommentInput = document.querySelector("#promotionCommentInput");
 const promotionImageInput = document.querySelector("#promotionImageInput");
 const promotionCropAspectInput = document.querySelector("#promotionCropAspectInput");
+const promotionSplitSizeInput = document.querySelector("#promotionSplitSizeInput");
+const splitPromotionImageButton = document.querySelector("#splitPromotionImageButton");
+const resizePromotionImageButton = document.querySelector("#resizePromotionImageButton");
 const cropPromotionImageButton = document.querySelector("#cropPromotionImageButton");
+const flipPromotionImageButton = document.querySelector("#flipPromotionImageButton");
+const undoPromotionImageButton = document.querySelector("#undoPromotionImageButton");
+const resetPromotionImageButton = document.querySelector("#resetPromotionImageButton");
 const stampPromotionImageButton = document.querySelector("#stampPromotionImageButton");
+const removeStampPromotionImageButton = document.querySelector("#removeStampPromotionImageButton");
+const saveEditedPromotionImageButton = document.querySelector("#saveEditedPromotionImageButton");
 const downloadPromotionImageButton = document.querySelector("#downloadPromotionImageButton");
 const promotionImagePreview = document.querySelector("#promotionImagePreview");
 const promotionCropCanvas = document.querySelector("#promotionCropCanvas");
-const promotionImageNameInput = document.querySelector("#promotionImageNameInput");
-const promotionImagePhoneInput = document.querySelector("#promotionImagePhoneInput");
+const promotionToolColorInput = document.querySelector("#promotionToolColorInput");
+const promotionToolOpacityInput = document.querySelector("#promotionToolOpacityInput");
+const promotionTextColorInput = document.querySelector("#promotionTextColorInput");
+const promotionTextSizeInput = document.querySelector("#promotionTextSizeInput");
+const promotionBoxColorInput = document.querySelector("#promotionBoxColorInput");
+const promotionShapeColorInput = document.querySelector("#promotionShapeColorInput");
+const promotionFrameImageInput = document.querySelector("#promotionFrameImageInput");
+const promotionBrushColorInput = document.querySelector("#promotionBrushColorInput");
+const promotionBrushSizeInput = document.querySelector("#promotionBrushSizeInput");
+const brushPromotionImageButton = document.querySelector("#brushPromotionImageButton");
+const promotionBrushSizeControl = document.querySelector("#promotionBrushSizeControl");
+const selectPromotionImageButton = document.querySelector("#selectPromotionImageButton");
+const deletePromotionObjectButton = document.querySelector("#deletePromotionObjectButton");
+const addPromotionToolColorButton = document.querySelector("#addPromotionToolColorButton");
+const promotionColorPalette = document.querySelector("#promotionColorPalette");
+const promotionStampOpacityInput = document.querySelector("#promotionStampOpacityInput");
+const mosaicPromotionImageButton = document.querySelector("#mosaicPromotionImageButton");
+const promotionShapeInput = document.querySelector("#promotionShapeInput");
+const promotionShapeOpacityInput = document.querySelector("#promotionShapeOpacityInput");
+const addShapePromotionImageButton = document.querySelector("#addShapePromotionImageButton");
+const drawShapePromotionImageButton = document.querySelector("#drawShapePromotionImageButton");
+const promotionColorToleranceInput = document.querySelector("#promotionColorToleranceInput");
+const promotionImageMessageInput = document.querySelector("#promotionImageMessageInput");
+const promotionToolColorChips = document.querySelectorAll("[data-tool-color-chip]");
 const promotionSearchInput = document.querySelector("#promotionSearchInput");
 const promotionNaverSearchButton = document.querySelector("#promotionNaverSearchButton");
 const promotionPinterestSearchButton = document.querySelector("#promotionPinterestSearchButton");
+const promotionGoogleSearchButton = document.querySelector("#promotionGoogleSearchButton");
+const promotionScreenshotPasteZone = document.querySelector("#promotionScreenshotPasteZone");
 const promotionMemoInput = document.querySelector("#promotionMemoInput");
+const promotionSourceTextInput = document.querySelector("#promotionSourceTextInput");
+const promotionIdeaTextInput = document.querySelector("#promotionIdeaTextInput");
+const promotionIdeaImageInput = document.querySelector("#promotionIdeaImageInput");
+const promotionIdeaUrlInput = document.querySelector("#promotionIdeaUrlInput");
+const extractPromotionBlogButton = document.querySelector("#extractPromotionBlogButton");
+const extractPromotionImageTextButton = document.querySelector("#extractPromotionImageTextButton");
+const savePromotionIdeaButton = document.querySelector("#savePromotionIdeaButton");
+const promotionEmojiBank = document.querySelector("#promotionEmojiBank");
+const promotionSelectedEmojiPreview = document.querySelector("#promotionSelectedEmojiPreview");
+const copyPromotionEmojiButton = document.querySelector("#copyPromotionEmojiButton");
+const promotionIdeaList = document.querySelector("#promotionIdeaList");
 const generatePromotionButton = document.querySelector("#generatePromotionButton");
 const copyPromotionButton = document.querySelector("#copyPromotionButton");
 const savePromotionButton = document.querySelector("#savePromotionButton");
 const promotionOutput = document.querySelector("#promotionOutput");
 const promotionSavedList = document.querySelector("#promotionSavedList");
+const promotionSavedImageList = document.querySelector("#promotionSavedImageList");
+const promotionCaseWhoInput = document.querySelector("#promotionCaseWhoInput");
+const promotionCaseWhenInput = document.querySelector("#promotionCaseWhenInput");
+const promotionCaseWhereInput = document.querySelector("#promotionCaseWhereInput");
+const promotionCaseHowInput = document.querySelector("#promotionCaseHowInput");
+const promotionCaseAmountInput = document.querySelector("#promotionCaseAmountInput");
+const promotionCaseDetailInput = document.querySelector("#promotionCaseDetailInput");
+const generatePromotionCaseButton = document.querySelector("#generatePromotionCaseButton");
+const savePromotionCaseButton = document.querySelector("#savePromotionCaseButton");
+const copyPromotionCaseButton = document.querySelector("#copyPromotionCaseButton");
+const promotionCaseOutput = document.querySelector("#promotionCaseOutput");
+const promotionCaseList = document.querySelector("#promotionCaseList");
 const promotionStatus = document.querySelector("#promotionStatus");
 const backToMainButton = document.querySelector("#backToMainButton");
 const output = document.querySelector("#customerCopyText") || document.querySelector("#output");
@@ -155,6 +210,11 @@ const phoneConsultationDraftStorageKey = "insurancePhoneConsultationDrafts";
 const phoneConsultationOrderStorageKey = "insurancePhoneConsultationOrders";
 const promotionPostsStorageKey = "insurancePromotionPosts";
 const promotionImageSignatureStorageKey = "insurancePromotionImageSignature";
+const promotionSavedImagesStorageKey = "insurancePromotionSavedImages";
+const promotionCasesStorageKey = "insurancePromotionCases";
+const promotionIdeasStorageKey = "insurancePromotionIdeas";
+const promotionSelectedEmojisStorageKey = "insurancePromotionSelectedEmojis";
+const promotionColorPaletteStorageKey = "insurancePromotionColorPalette";
 const deletedCustomersStorageKey = "insuranceDisclosureDeletedCustomers";
 const uiSessionStorageKey = "insuranceDisclosureUiSession";
 const customerManagerCollapsedStorageKey = "insuranceCustomerManagerCollapsed";
@@ -175,6 +235,30 @@ let selectedDesignManagerRow = null;
 let universeDisclosureText = "";
 let medicalAnalysisJson = null;
 let promotionImageObjectUrl = "";
+let promotionColorPickMode = false;
+let promotionPickedColor = null;
+let promotionImageEditMode = "";
+let promotionDragStart = null;
+let promotionImageHistory = [];
+let promotionOriginalImageDataUrl = "";
+let promotionLiveColorBase = null;
+let promotionTextOverlays = [];
+let promotionTextBaseDataUrl = "";
+let promotionTextBaseCanvas = null;
+let promotionDraggingTextIndex = -1;
+let promotionTextDragOffset = null;
+let promotionSelectedTextIndex = -1;
+let promotionResizingTextIndex = -1;
+let promotionTextResizeStart = null;
+let promotionFrameImage = null;
+let promotionGraphicOverlays = [];
+let promotionSelectedGraphicIndex = -1;
+let promotionDraggingGraphicIndex = -1;
+let promotionResizingGraphicIndex = -1;
+let promotionGraphicDragOffset = null;
+let promotionGraphicResizeStart = null;
+let promotionOcrScriptPromise = null;
+let promotionImageDbPromise = null;
 
 function safeOn(element, type, handler, options) {
   if (!element) {
@@ -1554,6 +1638,9 @@ function getPromotionChannelLabel(value) {
     blog: "네이버블로그",
     instagram: "인스타그램",
     kin: "네이버 지식인",
+    carrot: "당근",
+    youtube_shorts: "유튜브 쇼츠",
+    reels: "릴스",
   }[value] || "홍보";
 }
 
@@ -1616,6 +1703,7 @@ function savePromotionPost() {
     topic: promotionTopicInput?.value.trim() || getPromotionImageHint() || "홍보글",
     comment: promotionCommentInput?.value || "",
     memo: promotionMemoInput?.value || "",
+    sourceText: promotionSourceTextInput?.value || "",
     content,
     imageName: promotionImageInput?.files?.[0]?.name || "",
     createdAt: now,
@@ -1640,6 +1728,7 @@ function loadPromotionPost(id) {
   if (promotionTopicInput) promotionTopicInput.value = post.topic || "";
   if (promotionCommentInput) promotionCommentInput.value = post.comment || "";
   if (promotionMemoInput) promotionMemoInput.value = post.memo || "";
+  if (promotionSourceTextInput) promotionSourceTextInput.value = post.sourceText || "";
   if (promotionOutput) promotionOutput.value = post.content || "";
   showPromotionStatus("저장된 홍보글을 불러왔습니다.");
 }
@@ -1671,29 +1760,38 @@ function getStoredPromotionImageSignature() {
 
 function savePromotionImageSignature() {
   localStorage.setItem(promotionImageSignatureStorageKey, JSON.stringify({
-    name: promotionImageNameInput?.value || "",
-    phone: promotionImagePhoneInput?.value || "",
+    message: promotionImageMessageInput?.value || "",
+    textColor: promotionTextColorInput?.value || "#ffd400",
+    boxColor: promotionBoxColorInput?.value || "#000000",
+    shapeColor: promotionShapeColorInput?.value || "#39a95b",
+    toolColor: getPromotionCurrentColor(),
+    toolOpacity: Math.round(getPromotionCurrentOpacity() * 100),
   }));
 }
 
 function restorePromotionImageSignature() {
   const signature = getStoredPromotionImageSignature();
-  if (promotionImageNameInput) promotionImageNameInput.value = signature.name || "";
-  if (promotionImagePhoneInput) promotionImagePhoneInput.value = signature.phone || "";
+  if (promotionImageMessageInput) {
+    promotionImageMessageInput.value = signature.message || [signature.name, signature.phone].filter(Boolean).join("\n");
+  }
+  if (promotionTextColorInput && signature.textColor) promotionTextColorInput.value = signature.textColor;
+  if (promotionBoxColorInput && signature.boxColor) promotionBoxColorInput.value = signature.boxColor;
+  if (promotionShapeColorInput && signature.shapeColor) promotionShapeColorInput.value = signature.shapeColor;
+  if (promotionToolColorInput && signature.toolColor) promotionToolColorInput.value = signature.toolColor;
+  if (promotionToolOpacityInput && Number.isFinite(Number(signature.toolOpacity))) promotionToolOpacityInput.value = String(signature.toolOpacity);
 }
 
 function clearPromotionImageOutput() {
   if (promotionCropCanvas) promotionCropCanvas.hidden = true;
-  if (downloadPromotionImageButton) downloadPromotionImageButton.disabled = true;
+  if (downloadPromotionImageButton) downloadPromotionImageButton.disabled = false;
 }
 
-function handlePromotionImageSelected() {
-  const file = promotionImageInput?.files?.[0];
+function loadPromotionImageBlob(blob, message = "이미지를 불러왔습니다. 크롭 또는 이름/연락처 넣기를 눌러주세요.") {
   clearPromotionImageOutput();
   if (promotionImageObjectUrl) URL.revokeObjectURL(promotionImageObjectUrl);
   promotionImageObjectUrl = "";
 
-  if (!file || !promotionImagePreview) {
+  if (!blob || !promotionImagePreview) {
     if (promotionImagePreview) {
       promotionImagePreview.hidden = true;
       promotionImagePreview.removeAttribute("src");
@@ -1701,10 +1799,296 @@ function handlePromotionImageSelected() {
     return;
   }
 
-  promotionImageObjectUrl = URL.createObjectURL(file);
+  promotionImageObjectUrl = URL.createObjectURL(blob);
+  setPromotionOriginalFromBlob(blob);
+  promotionImageHistory = [];
+  promotionLiveColorBase = null;
+  promotionTextOverlays = [];
+  promotionTextBaseDataUrl = "";
+  promotionTextBaseCanvas = null;
+  promotionSelectedTextIndex = -1;
+  promotionGraphicOverlays = [];
+  promotionSelectedGraphicIndex = -1;
   promotionImagePreview.src = promotionImageObjectUrl;
   promotionImagePreview.hidden = false;
-  showPromotionStatus("이미지를 불러왔습니다. 크롭 또는 이름/연락처 넣기를 눌러주세요.");
+  if (promotionCropCanvas) promotionCropCanvas.hidden = true;
+  showPromotionStatus(message);
+}
+
+function syncPromotionCanvasToPreview() {
+  if (!promotionCropCanvas || !promotionImagePreview) return;
+  if (promotionImageObjectUrl) URL.revokeObjectURL(promotionImageObjectUrl);
+  promotionImageObjectUrl = promotionCropCanvas.toDataURL("image/png");
+  promotionImagePreview.src = promotionImageObjectUrl;
+}
+
+function setPromotionOriginalFromBlob(blob) {
+  promotionOriginalImageDataUrl = "";
+  if (!blob) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    promotionOriginalImageDataUrl = String(reader.result || "");
+  };
+  reader.readAsDataURL(blob);
+}
+
+function pushPromotionImageHistory() {
+  if (!promotionCropCanvas || promotionCropCanvas.hidden || !promotionCropCanvas.width || !promotionCropCanvas.height) return;
+  promotionImageHistory.push(promotionCropCanvas.toDataURL("image/png"));
+  if (promotionImageHistory.length > 20) promotionImageHistory.shift();
+}
+
+function undoPromotionImageEdit() {
+  if (!promotionImageHistory.length || !promotionCropCanvas) {
+    showPromotionStatus("되돌릴 이미지 편집이 없습니다.");
+    return;
+  }
+  const previous = promotionImageHistory.pop();
+  const image = new Image();
+  image.onload = () => {
+    promotionCropCanvas.width = image.naturalWidth;
+    promotionCropCanvas.height = image.naturalHeight;
+    const context = promotionCropCanvas.getContext("2d");
+    context.clearRect(0, 0, promotionCropCanvas.width, promotionCropCanvas.height);
+    context.drawImage(image, 0, 0);
+    promotionCropCanvas.hidden = false;
+    syncPromotionCanvasToPreview();
+    if (promotionImagePreview) promotionImagePreview.hidden = true;
+    if (downloadPromotionImageButton) downloadPromotionImageButton.disabled = false;
+    showPromotionStatus("이전 이미지 편집으로 되돌렸습니다.");
+  };
+  image.src = previous;
+}
+
+function resetPromotionImageToOriginal() {
+  if (!promotionOriginalImageDataUrl || !promotionImagePreview) {
+    showPromotionStatus("되돌릴 원본 이미지가 없습니다.");
+    return;
+  }
+  pushPromotionImageHistory();
+  promotionImagePreview.src = promotionOriginalImageDataUrl;
+  promotionImagePreview.hidden = false;
+  if (promotionCropCanvas) promotionCropCanvas.hidden = true;
+  if (downloadPromotionImageButton) downloadPromotionImageButton.disabled = false;
+  promotionLiveColorBase = null;
+  promotionTextOverlays = [];
+  promotionGraphicOverlays = [];
+  promotionTextBaseCanvas = null;
+  promotionTextBaseDataUrl = "";
+  promotionSelectedTextIndex = -1;
+  promotionSelectedGraphicIndex = -1;
+  showPromotionStatus("원본 이미지로 되돌렸습니다.");
+}
+
+function removePromotionStamp() {
+  if (promotionTextOverlays.length) {
+    promotionTextOverlays.pop();
+    promotionSelectedTextIndex = promotionTextOverlays.length - 1;
+    renderPromotionTextOverlays();
+    showPromotionStatus("마지막 메시지 글씨를 뺐습니다.");
+    return;
+  }
+  undoPromotionImageEdit();
+}
+
+function getPromotionCanvasPoint(event) {
+  const rect = promotionCropCanvas.getBoundingClientRect();
+  return {
+    x: Math.max(0, Math.min(promotionCropCanvas.width, Math.round((event.clientX - rect.left) * (promotionCropCanvas.width / rect.width)))),
+    y: Math.max(0, Math.min(promotionCropCanvas.height, Math.round((event.clientY - rect.top) * (promotionCropCanvas.height / rect.height)))),
+  };
+}
+
+function capturePromotionTextBase() {
+  if (!ensurePromotionCanvasFromVisibleImage()) return false;
+  if (!promotionTextBaseCanvas) {
+    promotionTextBaseCanvas = document.createElement("canvas");
+    promotionTextBaseCanvas.width = promotionCropCanvas.width;
+    promotionTextBaseCanvas.height = promotionCropCanvas.height;
+    promotionTextBaseCanvas.getContext("2d").drawImage(promotionCropCanvas, 0, 0);
+    promotionTextBaseDataUrl = promotionCropCanvas.toDataURL("image/png");
+  }
+  return true;
+}
+
+function getPromotionTextBounds(item, context = promotionCropCanvas?.getContext("2d")) {
+  if (!item || !context) return null;
+  const fontSize = Math.max(16, Number(item.fontSize || 44));
+  context.font = `800 ${fontSize}px sans-serif`;
+  const padding = Math.max(6, Math.round(fontSize * 0.24));
+  const textWidth = context.measureText(item.text).width;
+  return {
+    x: item.x - padding,
+    y: item.y - fontSize * 0.68,
+    width: textWidth + padding * 2,
+    height: fontSize * 1.36,
+  };
+}
+
+function drawPromotionGraphicOverlay(context, item) {
+  if (!item || !context) return;
+  const { x, y, width, height } = item;
+  const color = hexToRgb(item.color || "#39a95b");
+  context.save();
+  if (item.type === "frame" && item.image?.naturalWidth && item.image?.naturalHeight) {
+    context.beginPath();
+    if (item.shape === "circle") context.ellipse(x + width / 2, y + height / 2, width / 2, height / 2, 0, 0, Math.PI * 2);
+    else context.rect(x, y, width, height);
+    context.clip();
+    drawPromotionImageCover(context, item.image, x, y, width, height);
+    context.restore();
+    context.save();
+  }
+  context.fillStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${item.opacity})`;
+  context.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${item.opacity})`;
+  context.lineWidth = Math.max(4, Math.round(Math.min(promotionCropCanvas.width, promotionCropCanvas.height) * 0.008));
+  if (item.shape === "circle") {
+    context.beginPath();
+    context.ellipse(x + width / 2, y + height / 2, width / 2, height / 2, 0, 0, Math.PI * 2);
+    if (item.type === "fill") context.fill();
+    else context.stroke();
+  } else if (item.type === "fill") {
+    context.fillRect(x, y, width, height);
+  } else {
+    context.strokeRect(x, y, width, height);
+  }
+  context.restore();
+}
+
+function findPromotionGraphicAt(point) {
+  for (let index = promotionGraphicOverlays.length - 1; index >= 0; index -= 1) {
+    const item = promotionGraphicOverlays[index];
+    if (point.x >= item.x - 8 && point.x <= item.x + item.width + 8 && point.y >= item.y - 8 && point.y <= item.y + item.height + 8) return index;
+  }
+  return -1;
+}
+
+function renderPromotionTextOverlays({ showSelection = true } = {}) {
+  if (!promotionCropCanvas || !promotionTextBaseCanvas) return;
+  promotionCropCanvas.width = promotionTextBaseCanvas.width;
+  promotionCropCanvas.height = promotionTextBaseCanvas.height;
+  const context = promotionCropCanvas.getContext("2d");
+  context.clearRect(0, 0, promotionCropCanvas.width, promotionCropCanvas.height);
+  context.drawImage(promotionTextBaseCanvas, 0, 0);
+  promotionGraphicOverlays.forEach((item) => drawPromotionGraphicOverlay(context, item));
+  promotionTextOverlays.forEach((item) => {
+    const fontSize = Math.max(16, Number(item.fontSize || 44));
+    context.font = `800 ${fontSize}px sans-serif`;
+    context.textBaseline = "middle";
+    const textWidth = context.measureText(item.text).width;
+    const padding = Math.max(6, Math.round(fontSize * 0.24));
+    const boxColor = hexToRgb(item.boxColor || "#000000");
+    context.fillStyle = `rgba(${boxColor.r}, ${boxColor.g}, ${boxColor.b}, ${Number(item.boxOpacity ?? 0.58)})`;
+    context.fillRect(item.x - padding, item.y - fontSize * 0.68, textWidth + padding * 2, fontSize * 1.36);
+    context.lineWidth = Math.max(2, Math.round(fontSize * 0.08));
+    context.strokeStyle = "rgba(0, 0, 0, 0.45)";
+    context.fillStyle = item.color || "#ffd400";
+    context.strokeText(item.text, item.x, item.y);
+    context.fillText(item.text, item.x, item.y);
+  });
+  const selectedItem = promotionTextOverlays[promotionSelectedTextIndex];
+  if (showSelection && selectedItem) {
+    const bounds = getPromotionTextBounds(selectedItem, context);
+    const handleSize = Math.max(14, Math.round(Number(selectedItem.fontSize || 44) * 0.32));
+    context.save();
+    context.strokeStyle = "#168c45";
+    context.lineWidth = 3;
+    context.setLineDash([8, 6]);
+    context.strokeRect(bounds.x - 4, bounds.y - 4, bounds.width + 8, bounds.height + 8);
+    context.setLineDash([]);
+    context.fillStyle = "#168c45";
+    context.fillRect(bounds.x + bounds.width - handleSize / 2, bounds.y + bounds.height - handleSize / 2, handleSize, handleSize);
+    context.restore();
+  }
+  const selectedGraphic = promotionGraphicOverlays[promotionSelectedGraphicIndex];
+  if (showSelection && selectedGraphic) {
+    const handleSize = 16;
+    context.save();
+    context.strokeStyle = "#168c45";
+    context.lineWidth = 3;
+    context.setLineDash([8, 6]);
+    context.strokeRect(selectedGraphic.x - 4, selectedGraphic.y - 4, selectedGraphic.width + 8, selectedGraphic.height + 8);
+    context.setLineDash([]);
+    context.fillStyle = "#168c45";
+    context.fillRect(selectedGraphic.x + selectedGraphic.width - handleSize / 2, selectedGraphic.y + selectedGraphic.height - handleSize / 2, handleSize, handleSize);
+    context.restore();
+  }
+  promotionCropCanvas.hidden = false;
+  syncPromotionCanvasToPreview();
+  if (promotionImagePreview) promotionImagePreview.hidden = true;
+  if (downloadPromotionImageButton) downloadPromotionImageButton.disabled = false;
+}
+
+function addPromotionMessageText() {
+  if (!capturePromotionTextBase()) return;
+  const lines = String(promotionImageMessageInput?.value || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (!lines.length) {
+    showPromotionStatus("사진에 넣을 메시지를 먼저 입력해 주세요.");
+    promotionImageMessageInput?.focus();
+    return;
+  }
+  pushPromotionImageHistory();
+  savePromotionImageSignature();
+  const fontSize = Math.max(16, Number(promotionTextSizeInput?.value || 44));
+  const lineHeight = fontSize * 1.55;
+  const startX = Math.max(24, Math.round(promotionCropCanvas.width * 0.06));
+  const startY = Math.max(fontSize, promotionCropCanvas.height - lineHeight * lines.length - Math.round(promotionCropCanvas.height * 0.05));
+  lines.forEach((text, index) => {
+    promotionTextOverlays.push({
+      text,
+      x: startX,
+      y: startY + lineHeight * index,
+      fontSize,
+      color: getPromotionContrastColor(getPromotionCurrentColor()),
+      boxColor: getPromotionCurrentColor(),
+      boxOpacity: getPromotionCurrentOpacity(),
+    });
+  });
+  promotionSelectedTextIndex = promotionTextOverlays.length - 1;
+  renderPromotionTextOverlays();
+  showPromotionStatus("글씨를 넣었습니다. 글씨를 클릭해 드래그하면 이동합니다.");
+}
+
+function updateSelectedPromotionTextStyle() {
+  const item = promotionTextOverlays[promotionSelectedTextIndex];
+  if (item) {
+    item.fontSize = Math.max(16, Number(promotionTextSizeInput?.value || item.fontSize || 44));
+    item.boxColor = getPromotionCurrentColor();
+    item.color = getPromotionContrastColor(item.boxColor);
+    item.boxOpacity = getPromotionCurrentOpacity();
+  }
+  const graphic = promotionGraphicOverlays[promotionSelectedGraphicIndex];
+  if (graphic) {
+    graphic.color = getPromotionCurrentColor();
+    graphic.opacity = getPromotionCurrentOpacity();
+  }
+  if (item || graphic) renderPromotionTextOverlays();
+}
+
+function findPromotionTextAt(point) {
+  if (!promotionCropCanvas) return -1;
+  const context = promotionCropCanvas.getContext("2d");
+  for (let index = promotionTextOverlays.length - 1; index >= 0; index -= 1) {
+    const item = promotionTextOverlays[index];
+    const bounds = getPromotionTextBounds(item, context);
+    if (
+      point.x >= bounds.x - 8 &&
+      point.x <= bounds.x + bounds.width + 8 &&
+      point.y >= bounds.y - 8 &&
+      point.y <= bounds.y + bounds.height + 8
+    ) {
+      return index;
+    }
+  }
+  return -1;
+}
+
+function handlePromotionImageSelected() {
+  const file = promotionImageInput?.files?.[0];
+  loadPromotionImageBlob(file);
 }
 
 function getPromotionCropRatio() {
@@ -1721,8 +2105,20 @@ function drawPromotionImageToCanvas({ stamp = false } = {}) {
   }
 
   const image = promotionImagePreview;
-  const sourceWidth = image.naturalWidth;
-  const sourceHeight = image.naturalHeight;
+  let source = image;
+  let sourceWidth = image.naturalWidth;
+  let sourceHeight = image.naturalHeight;
+  const hasVisibleCanvas = !promotionCropCanvas.hidden && promotionCropCanvas.width && promotionCropCanvas.height;
+  if (hasVisibleCanvas) {
+    const snapshot = document.createElement("canvas");
+    snapshot.width = promotionCropCanvas.width;
+    snapshot.height = promotionCropCanvas.height;
+    snapshot.getContext("2d").drawImage(promotionCropCanvas, 0, 0);
+    source = snapshot;
+    sourceWidth = snapshot.width;
+    sourceHeight = snapshot.height;
+    pushPromotionImageHistory();
+  }
   if (!sourceWidth || !sourceHeight) {
     showPromotionStatus("이미지를 아직 불러오는 중입니다.");
     return false;
@@ -1753,13 +2149,15 @@ function drawPromotionImageToCanvas({ stamp = false } = {}) {
 
   const context = promotionCropCanvas.getContext("2d");
   context.clearRect(0, 0, canvasWidth, canvasHeight);
-  context.drawImage(image, sx, sy, sw, sh, 0, 0, canvasWidth, canvasHeight);
+  context.drawImage(source, sx, sy, sw, sh, 0, 0, canvasWidth, canvasHeight);
 
   if (stamp) {
+    pushPromotionImageHistory();
     savePromotionImageSignature();
-    const name = promotionImageNameInput?.value.trim() || "";
-    const phone = promotionImagePhoneInput?.value.trim() || "";
-    const lines = [name, phone].filter(Boolean);
+    const lines = String(promotionImageMessageInput?.value || "")
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
     if (lines.length) {
       const padding = Math.max(18, Math.round(canvasWidth * 0.025));
       const fontSize = Math.max(24, Math.round(canvasWidth * 0.042));
@@ -1769,9 +2167,11 @@ function drawPromotionImageToCanvas({ stamp = false } = {}) {
       const boxX = canvasWidth - boxWidth - padding;
       const boxY = canvasHeight - boxHeight - padding;
 
-      context.fillStyle = "rgba(0, 0, 0, 0.58)";
+      const opacity = Math.max(0, Math.min(1, Number(promotionStampOpacityInput?.value || 58) / 100));
+      const boxColor = hexToRgb(promotionBoxColorInput?.value || "#000000");
+      context.fillStyle = `rgba(${boxColor.r}, ${boxColor.g}, ${boxColor.b}, ${opacity})`;
       context.fillRect(boxX, boxY, boxWidth, boxHeight);
-      context.fillStyle = "#ffffff";
+      context.fillStyle = promotionTextColorInput?.value || "#ffd400";
       context.font = `700 ${fontSize}px sans-serif`;
       context.textBaseline = "middle";
       lines.forEach((line, index) => {
@@ -1781,13 +2181,564 @@ function drawPromotionImageToCanvas({ stamp = false } = {}) {
   }
 
   promotionCropCanvas.hidden = false;
+  syncPromotionCanvasToPreview();
+  if (promotionImagePreview) promotionImagePreview.hidden = true;
   if (downloadPromotionImageButton) downloadPromotionImageButton.disabled = false;
   showPromotionStatus(stamp ? "이름/연락처를 이미지에 넣었습니다." : "이미지를 크롭했습니다.");
   return true;
 }
 
-function downloadPromotionImage() {
+function ensurePromotionCanvasFromVisibleImage() {
+  if (!promotionCropCanvas) return false;
+  if (!promotionCropCanvas.hidden && promotionCropCanvas.width && promotionCropCanvas.height) return true;
+  return drawPromotionImageToCanvas({ stamp: false });
+}
+
+function flipPromotionImageHorizontal() {
+  if (!ensurePromotionCanvasFromVisibleImage()) return;
+  pushPromotionImageHistory();
+  const width = promotionCropCanvas.width;
+  const height = promotionCropCanvas.height;
+  const temp = document.createElement("canvas");
+  temp.width = width;
+  temp.height = height;
+  temp.getContext("2d").drawImage(promotionCropCanvas, 0, 0);
+
+  const context = promotionCropCanvas.getContext("2d");
+  context.clearRect(0, 0, width, height);
+  context.save();
+  context.translate(width, 0);
+  context.scale(-1, 1);
+  context.drawImage(temp, 0, 0);
+  context.restore();
+  promotionCropCanvas.hidden = false;
+  syncPromotionCanvasToPreview();
+  if (promotionImagePreview) promotionImagePreview.hidden = true;
+  if (downloadPromotionImageButton) downloadPromotionImageButton.disabled = false;
+  showPromotionStatus("사진을 좌우대칭으로 변경했습니다.");
+}
+
+function hexToRgb(hex) {
+  const normalized = String(hex || "").replace("#", "");
+  if (!/^[0-9a-f]{6}$/i.test(normalized)) return { r: 255, g: 212, b: 0 };
+  return {
+    r: parseInt(normalized.slice(0, 2), 16),
+    g: parseInt(normalized.slice(2, 4), 16),
+    b: parseInt(normalized.slice(4, 6), 16),
+  };
+}
+
+function getPromotionCurrentColor() {
+  return promotionToolColorInput?.value || "#39a95b";
+}
+
+function getPromotionCurrentOpacity() {
+  return Math.max(0, Math.min(1, Number(promotionToolOpacityInput?.value || 70) / 100));
+}
+
+function getPromotionContrastColor(hex) {
+  const color = hexToRgb(hex);
+  return (color.r * 299 + color.g * 587 + color.b * 114) / 1000 > 150 ? "#111111" : "#ffffff";
+}
+
+function updatePromotionToolColorChips() {
+  const color = promotionToolColorInput?.value || "#ffd400";
+  promotionToolColorChips.forEach((chip) => {
+    chip.style.background = color;
+    chip.title = `공통 색상: ${color}`;
+  });
+}
+
+function normalizeHexColor(color) {
+  const value = String(color || "").trim().toLowerCase();
+  return /^#[0-9a-f]{6}$/.test(value) ? value : "#ffd400";
+}
+
+function getStoredPromotionColorPalette() {
+  const palette = readJsonStorage(getScopedStorageKey(promotionColorPaletteStorageKey), []);
+  const base = ["#ffd400"];
+  const stored = Array.isArray(palette) ? palette : [];
+  return [...new Set([...base, ...stored].map(normalizeHexColor))].slice(0, 24);
+}
+
+function setStoredPromotionColorPalette(palette) {
+  localStorage.setItem(getScopedStorageKey(promotionColorPaletteStorageKey), JSON.stringify(Array.isArray(palette) ? palette : []));
+}
+
+function setPromotionToolColor(color, { applyReplacement = true, armPicker = false } = {}) {
+  const hex = normalizeHexColor(color);
+  if (promotionToolColorInput) promotionToolColorInput.value = hex;
+  updatePromotionToolColorChips();
+  renderPromotionColorPalette();
+  if (applyReplacement) applyPromotionColorReplacementFromBase();
+  if (armPicker) armPromotionAutoColorPick();
+}
+
+function renderPromotionColorPalette() {
+  if (!promotionColorPalette) return;
+  const current = normalizeHexColor(promotionToolColorInput?.value || "#ffd400");
+  promotionColorPalette.innerHTML = "";
+  getStoredPromotionColorPalette().forEach((color) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "promotion-color-palette-chip";
+    if (color === current) button.classList.add("selected");
+    button.dataset.promotionPaletteColor = color;
+    button.style.background = color;
+    button.title = `색상 선택 ${color}`;
+    button.setAttribute("aria-label", `색상 선택 ${color}`);
+    promotionColorPalette.append(button);
+  });
+}
+
+function addPromotionToolColor() {
+  const color = normalizeHexColor(promotionToolColorInput?.value || "#ffd400");
+  const palette = getStoredPromotionColorPalette().filter((item) => item !== color);
+  setStoredPromotionColorPalette([color, ...palette].slice(0, 24));
+  renderPromotionColorPalette();
+  showPromotionStatus("색상표에 색상을 추가했습니다.");
+}
+
+function armPromotionAutoColorPick() {
   if (!promotionCropCanvas || promotionCropCanvas.hidden) {
+    ensurePromotionCanvasFromVisibleImage();
+  }
+  if (!promotionCropCanvas || promotionCropCanvas.hidden) return;
+  promotionColorPickMode = true;
+  promotionCropCanvas.classList.add("promotion-eyedropper-mode");
+  showPromotionStatus("이미지 위를 클릭하면 그 위치의 색을 추출합니다.");
+}
+
+function setPromotionPickedColor(color) {
+  promotionPickedColor = color;
+}
+
+function replacePromotionColorFromPoint(event) {
+  if (!promotionColorPickMode || !promotionCropCanvas || promotionCropCanvas.hidden) return;
+  const rect = promotionCropCanvas.getBoundingClientRect();
+  const x = Math.floor((event.clientX - rect.left) * (promotionCropCanvas.width / rect.width));
+  const y = Math.floor((event.clientY - rect.top) * (promotionCropCanvas.height / rect.height));
+  const context = promotionCropCanvas.getContext("2d");
+  const pickedData = context.getImageData(x, y, 1, 1).data;
+  const target = { r: pickedData[0], g: pickedData[1], b: pickedData[2] };
+  setPromotionPickedColor(target);
+  pushPromotionImageHistory();
+  promotionLiveColorBase = context.getImageData(0, 0, promotionCropCanvas.width, promotionCropCanvas.height);
+  applyPromotionColorReplacementFromBase();
+  finishPromotionColorPick();
+}
+
+function applyPromotionColorReplacementFromBase() {
+  if (!promotionLiveColorBase || !promotionPickedColor || !promotionCropCanvas) return;
+  const context = promotionCropCanvas.getContext("2d");
+
+  const replacement = hexToRgb(promotionToolColorInput?.value || "#ffd400");
+  const tolerance = Number(promotionColorToleranceInput?.value || 55);
+  const imageData = new ImageData(
+    new Uint8ClampedArray(promotionLiveColorBase.data),
+    promotionLiveColorBase.width,
+    promotionLiveColorBase.height,
+  );
+  const data = imageData.data;
+  const target = promotionPickedColor;
+  for (let index = 0; index < data.length; index += 4) {
+    const distance = Math.hypot(data[index] - target.r, data[index + 1] - target.g, data[index + 2] - target.b);
+    if (distance <= tolerance) {
+      const strength = Math.max(0.2, 1 - distance / Math.max(tolerance, 1));
+      data[index] = Math.round(data[index] * (1 - strength) + replacement.r * strength);
+      data[index + 1] = Math.round(data[index + 1] * (1 - strength) + replacement.g * strength);
+      data[index + 2] = Math.round(data[index + 2] * (1 - strength) + replacement.b * strength);
+    }
+  }
+  context.putImageData(imageData, 0, 0);
+  syncPromotionCanvasToPreview();
+  if (downloadPromotionImageButton) downloadPromotionImageButton.disabled = false;
+  showPromotionStatus("선택한 사진 색상을 지정한 색으로 변경했습니다.");
+}
+
+function handlePromotionColorToleranceChange() {
+  if (!promotionLiveColorBase || !promotionPickedColor) {
+    armPromotionAutoColorPick();
+    showPromotionStatus("바꾸고 싶은 사진 속 색상을 클릭하세요.");
+    return;
+  }
+  applyPromotionColorReplacementFromBase();
+}
+
+function finishPromotionColorPick() {
+  promotionColorPickMode = false;
+  promotionCropCanvas?.classList.remove("promotion-eyedropper-mode");
+}
+
+function flattenPromotionTextOverlays() {
+  if (!promotionTextOverlays.length) return;
+  promotionTextOverlays = [];
+  promotionTextBaseCanvas = null;
+  promotionTextBaseDataUrl = "";
+  promotionSelectedTextIndex = -1;
+}
+
+function stopPromotionImageEditMode() {
+  promotionImageEditMode = "";
+  promotionDragStart = null;
+  brushPromotionImageButton?.classList.remove("selected");
+  promotionCropCanvas?.classList.remove("promotion-brush-mode");
+  if (promotionBrushSizeControl) promotionBrushSizeControl.hidden = true;
+  showPromotionStatus("글씨·도형·액자를 클릭한 뒤 드래그하면 이동할 수 있습니다.");
+}
+
+function deleteSelectedPromotionObject() {
+  if (promotionSelectedTextIndex >= 0 && promotionTextOverlays[promotionSelectedTextIndex]) {
+    promotionTextOverlays.splice(promotionSelectedTextIndex, 1);
+    promotionSelectedTextIndex = -1;
+    renderPromotionTextOverlays();
+    showPromotionStatus("선택한 글씨를 삭제했습니다.");
+    return;
+  }
+  if (promotionSelectedGraphicIndex >= 0 && promotionGraphicOverlays[promotionSelectedGraphicIndex]) {
+    promotionGraphicOverlays.splice(promotionSelectedGraphicIndex, 1);
+    promotionSelectedGraphicIndex = -1;
+    renderPromotionTextOverlays();
+    showPromotionStatus("선택한 도형 또는 액자를 삭제했습니다.");
+    return;
+  }
+  undoPromotionImageEdit();
+}
+
+function startPromotionBrushMode() {
+  if (!ensurePromotionCanvasFromVisibleImage()) return;
+  if (promotionImageEditMode === "brush") {
+    stopPromotionImageEditMode();
+    return;
+  }
+  promotionImageEditMode = "brush";
+  brushPromotionImageButton?.classList.add("selected");
+  promotionCropCanvas.classList.add("promotion-brush-mode");
+  if (promotionBrushSizeControl) promotionBrushSizeControl.hidden = false;
+  promotionCropCanvas.hidden = false;
+  if (promotionImagePreview) promotionImagePreview.hidden = true;
+  showPromotionStatus("사진 위를 마우스로 드래그해 붓으로 칠하세요. 붓 버튼을 다시 누르면 종료됩니다.");
+}
+
+function handlePromotionFrameImageSelected() {
+  const file = promotionFrameImageInput?.files?.[0];
+  if (!file) {
+    promotionFrameImage = null;
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => {
+    const image = new Image();
+    image.onload = () => {
+      promotionFrameImage = image;
+      showPromotionStatus("액자 안에 넣을 이미지를 준비했습니다. 액자 +를 누르고 원하는 크기로 드래그하세요.");
+    };
+    image.src = String(reader.result || "");
+  };
+  reader.readAsDataURL(file);
+}
+
+function startPromotionMosaicMode() {
+  if (!ensurePromotionCanvasFromVisibleImage()) return;
+  brushPromotionImageButton?.classList.remove("selected");
+  promotionCropCanvas?.classList.remove("promotion-brush-mode");
+  if (promotionBrushSizeControl) promotionBrushSizeControl.hidden = true;
+  promotionImageEditMode = "mosaic";
+  promotionCropCanvas.hidden = false;
+  if (promotionImagePreview) promotionImagePreview.hidden = true;
+  showPromotionStatus("모자이크할 부분을 사진에서 드래그하세요.");
+}
+
+function startPromotionShapeMode(mode = "frame") {
+  if (!ensurePromotionCanvasFromVisibleImage()) return;
+  brushPromotionImageButton?.classList.remove("selected");
+  promotionCropCanvas?.classList.remove("promotion-brush-mode");
+  if (promotionBrushSizeControl) promotionBrushSizeControl.hidden = true;
+  promotionImageEditMode = mode === "fill" ? "shape-fill" : "shape-frame";
+  promotionCropCanvas.hidden = false;
+  if (promotionImagePreview) promotionImagePreview.hidden = true;
+  showPromotionStatus(mode === "fill" ? "도형을 추가할 영역을 사진에서 드래그하세요." : "액자를 추가할 영역을 사진에서 드래그하세요.");
+}
+
+function drawPromotionImageCover(context, image, x, y, width, height) {
+  const scale = Math.max(width / image.naturalWidth, height / image.naturalHeight);
+  const sourceWidth = width / scale;
+  const sourceHeight = height / scale;
+  const sourceX = (image.naturalWidth - sourceWidth) / 2;
+  const sourceY = (image.naturalHeight - sourceHeight) / 2;
+  context.drawImage(image, sourceX, sourceY, sourceWidth, sourceHeight, x, y, width, height);
+}
+
+function applyPromotionMosaicRegion(start, end, editCanvas = promotionCropCanvas) {
+  const x = Math.min(start.x, end.x);
+  const y = Math.min(start.y, end.y);
+  const width = Math.abs(end.x - start.x);
+  const height = Math.abs(end.y - start.y);
+  if (width < 6 || height < 6) return false;
+  const context = editCanvas.getContext("2d");
+  const blockSize = Math.max(8, Math.round(Math.min(width, height) / 12));
+  for (let blockY = y; blockY < y + height; blockY += blockSize) {
+    for (let blockX = x; blockX < x + width; blockX += blockSize) {
+      const sampleX = Math.min(blockX + Math.floor(blockSize / 2), editCanvas.width - 1);
+      const sampleY = Math.min(blockY + Math.floor(blockSize / 2), editCanvas.height - 1);
+      const pixel = context.getImageData(sampleX, sampleY, 1, 1).data;
+      context.fillStyle = `rgb(${pixel[0]}, ${pixel[1]}, ${pixel[2]})`;
+      context.fillRect(blockX, blockY, blockSize, blockSize);
+    }
+  }
+  return true;
+}
+
+function applyPromotionShapeRegion(start, end, { filled = false, frameImage = null, editCanvas = promotionCropCanvas } = {}) {
+  const x = Math.min(start.x, end.x);
+  const y = Math.min(start.y, end.y);
+  const width = Math.abs(end.x - start.x);
+  const height = Math.abs(end.y - start.y);
+  if (width < 8 || height < 8) return false;
+  const context = editCanvas.getContext("2d");
+  const shape = promotionShapeInput?.value || "rect";
+  if (!filled && frameImage?.naturalWidth && frameImage?.naturalHeight) {
+    context.save();
+    context.beginPath();
+    if (shape === "circle") context.ellipse(x + width / 2, y + height / 2, width / 2, height / 2, 0, 0, Math.PI * 2);
+    else context.rect(x, y, width, height);
+    context.clip();
+    drawPromotionImageCover(context, frameImage, x, y, width, height);
+    context.restore();
+  }
+  context.save();
+  const shapeColor = hexToRgb(getPromotionCurrentColor());
+  const shapeOpacity = getPromotionCurrentOpacity();
+  context.fillStyle = `rgba(${shapeColor.r}, ${shapeColor.g}, ${shapeColor.b}, ${shapeOpacity})`;
+  context.strokeStyle = `rgba(${shapeColor.r}, ${shapeColor.g}, ${shapeColor.b}, ${shapeOpacity})`;
+  context.lineWidth = Math.max(4, Math.round(Math.min(editCanvas.width, editCanvas.height) * 0.008));
+  context.shadowColor = "rgba(0, 0, 0, 0.18)";
+  context.shadowBlur = 3;
+  if (shape === "circle") {
+    context.beginPath();
+    context.ellipse(x + width / 2, y + height / 2, width / 2, height / 2, 0, 0, Math.PI * 2);
+    if (filled) context.fill();
+    else context.stroke();
+  } else {
+    if (filled) context.fillRect(x, y, width, height);
+    else context.strokeRect(x, y, width, height);
+  }
+  context.restore();
+  return true;
+}
+
+function handlePromotionCanvasPointerDown(event) {
+  if (!promotionCropCanvas || promotionCropCanvas.hidden) return;
+  const point = getPromotionCanvasPoint(event);
+  if (promotionImageEditMode === "brush") {
+    pushPromotionImageHistory();
+    promotionDragStart = point;
+    event.preventDefault();
+    return;
+  }
+  if (!promotionImageEditMode && !promotionColorPickMode) {
+    const textIndex = findPromotionTextAt(point);
+    if (textIndex >= 0) {
+      pushPromotionImageHistory();
+      promotionSelectedTextIndex = textIndex;
+      const selectedItem = promotionTextOverlays[textIndex];
+      const bounds = getPromotionTextBounds(selectedItem);
+      const handleHitSize = Math.max(24, Math.round(Number(selectedItem.fontSize || 44) * 0.55));
+      if (
+        point.x >= bounds.x + bounds.width - handleHitSize &&
+        point.y >= bounds.y + bounds.height - handleHitSize
+      ) {
+        promotionResizingTextIndex = textIndex;
+        promotionTextResizeStart = { x: point.x, y: point.y, fontSize: Number(selectedItem.fontSize || 44) };
+        renderPromotionTextOverlays();
+        showPromotionStatus("초록색 조절점을 드래그해 글씨 크기를 바꾸세요.");
+        event.preventDefault();
+        return;
+      }
+      promotionDraggingTextIndex = textIndex;
+      promotionTextDragOffset = {
+        x: point.x - promotionTextOverlays[textIndex].x,
+        y: point.y - promotionTextOverlays[textIndex].y,
+      };
+      event.preventDefault();
+      return;
+    }
+    const graphicIndex = findPromotionGraphicAt(point);
+    if (graphicIndex >= 0) {
+      pushPromotionImageHistory();
+      promotionSelectedTextIndex = -1;
+      promotionSelectedGraphicIndex = graphicIndex;
+      const item = promotionGraphicOverlays[graphicIndex];
+      const handleHitSize = 28;
+      if (point.x >= item.x + item.width - handleHitSize && point.y >= item.y + item.height - handleHitSize) {
+        promotionResizingGraphicIndex = graphicIndex;
+        promotionGraphicResizeStart = { x: point.x, y: point.y, width: item.width, height: item.height };
+        renderPromotionTextOverlays();
+        showPromotionStatus("초록색 조절점을 드래그해 크기를 바꾸세요.");
+        event.preventDefault();
+        return;
+      }
+      promotionDraggingGraphicIndex = graphicIndex;
+      promotionGraphicDragOffset = { x: point.x - item.x, y: point.y - item.y };
+      renderPromotionTextOverlays();
+      showPromotionStatus("선택한 도형이나 액자를 드래그해 이동하세요.");
+      event.preventDefault();
+      return;
+    }
+    promotionSelectedTextIndex = -1;
+    promotionSelectedGraphicIndex = -1;
+    if (promotionTextBaseCanvas) renderPromotionTextOverlays();
+  }
+  if (!promotionImageEditMode || promotionColorPickMode) return;
+  promotionDragStart = point;
+  event.preventDefault();
+}
+
+function handlePromotionCanvasPointerUp(event) {
+  if (promotionImageEditMode === "brush" && promotionDragStart) {
+    promotionDragStart = null;
+    if (promotionTextOverlays.length || promotionGraphicOverlays.length) renderPromotionTextOverlays();
+    else syncPromotionCanvasToPreview();
+    if (downloadPromotionImageButton) downloadPromotionImageButton.disabled = false;
+    showPromotionStatus("붓으로 색을 칠했습니다. 계속 드래그하거나 붓 버튼을 다시 눌러 종료하세요.");
+    return;
+  }
+  if (promotionDraggingTextIndex >= 0) {
+    promotionDraggingTextIndex = -1;
+    promotionTextDragOffset = null;
+    syncPromotionCanvasToPreview();
+    showPromotionStatus("글씨 위치를 이동했습니다.");
+    return;
+  }
+  if (promotionResizingTextIndex >= 0) {
+    promotionResizingTextIndex = -1;
+    promotionTextResizeStart = null;
+    syncPromotionCanvasToPreview();
+    showPromotionStatus("글씨 크기를 변경했습니다.");
+    return;
+  }
+  if (promotionDraggingGraphicIndex >= 0) {
+    promotionDraggingGraphicIndex = -1;
+    promotionGraphicDragOffset = null;
+    syncPromotionCanvasToPreview();
+    showPromotionStatus("도형 또는 액자 위치를 이동했습니다.");
+    return;
+  }
+  if (promotionResizingGraphicIndex >= 0) {
+    promotionResizingGraphicIndex = -1;
+    promotionGraphicResizeStart = null;
+    syncPromotionCanvasToPreview();
+    showPromotionStatus("도형 또는 액자 크기를 변경했습니다.");
+    return;
+  }
+  if (!promotionImageEditMode || !promotionDragStart || !promotionCropCanvas || promotionCropCanvas.hidden) return;
+  const end = getPromotionCanvasPoint(event);
+  if (promotionImageEditMode === "shape-fill" || promotionImageEditMode === "shape-frame") {
+    const x = Math.min(promotionDragStart.x, end.x);
+    const y = Math.min(promotionDragStart.y, end.y);
+    const width = Math.abs(end.x - promotionDragStart.x);
+    const height = Math.abs(end.y - promotionDragStart.y);
+    if (width < 8 || height < 8) {
+      showPromotionStatus("조금 더 크게 드래그해주세요.");
+    } else {
+      capturePromotionTextBase();
+      pushPromotionImageHistory();
+      promotionGraphicOverlays.push({
+        type: promotionImageEditMode === "shape-fill" ? "fill" : "frame",
+        shape: promotionShapeInput?.value || "rect",
+        x,
+        y,
+        width,
+        height,
+        color: getPromotionCurrentColor(),
+        opacity: getPromotionCurrentOpacity(),
+        image: promotionImageEditMode === "shape-frame" ? promotionFrameImage : null,
+      });
+      promotionSelectedGraphicIndex = promotionGraphicOverlays.length - 1;
+      promotionSelectedTextIndex = -1;
+      renderPromotionTextOverlays();
+      showPromotionStatus(promotionImageEditMode === "shape-fill" ? "도형을 추가했습니다. 선택해서 이동하거나 크기를 바꿀 수 있습니다." : "액자를 추가했습니다. 선택해서 이동하거나 크기를 바꿀 수 있습니다.");
+    }
+    promotionImageEditMode = "";
+    promotionDragStart = null;
+    return;
+  }
+  pushPromotionImageHistory();
+  const editCanvas = promotionTextBaseCanvas && (promotionTextOverlays.length || promotionGraphicOverlays.length) ? promotionTextBaseCanvas : promotionCropCanvas;
+  const applied = promotionImageEditMode === "mosaic"
+    ? applyPromotionMosaicRegion(promotionDragStart, end, editCanvas)
+    : false;
+  if (!applied) {
+    promotionImageHistory.pop();
+    showPromotionStatus("조금 더 크게 드래그해주세요.");
+  } else {
+    if (promotionTextOverlays.length || promotionGraphicOverlays.length) renderPromotionTextOverlays();
+    else syncPromotionCanvasToPreview();
+    if (downloadPromotionImageButton) downloadPromotionImageButton.disabled = false;
+    showPromotionStatus(
+      promotionImageEditMode === "mosaic"
+        ? "선택한 영역에 모자이크를 넣었습니다."
+        : promotionImageEditMode === "shape-fill"
+          ? "선택한 영역에 도형을 추가했습니다."
+          : "선택한 영역에 액자를 추가했습니다.",
+    );
+  }
+  promotionImageEditMode = "";
+  promotionDragStart = null;
+}
+
+function handlePromotionCanvasPointerMove(event) {
+  if (promotionImageEditMode === "brush" && promotionDragStart && promotionCropCanvas && !promotionCropCanvas.hidden) {
+    const point = getPromotionCanvasPoint(event);
+    const editCanvas = promotionTextBaseCanvas && (promotionTextOverlays.length || promotionGraphicOverlays.length) ? promotionTextBaseCanvas : promotionCropCanvas;
+    const context = editCanvas.getContext("2d");
+    context.save();
+    context.strokeStyle = getPromotionCurrentColor();
+    context.globalAlpha = getPromotionCurrentOpacity();
+    context.lineWidth = Math.max(2, Number(promotionBrushSizeInput?.value || 16));
+    context.lineCap = "round";
+    context.lineJoin = "round";
+    context.beginPath();
+    context.moveTo(promotionDragStart.x, promotionDragStart.y);
+    context.lineTo(point.x, point.y);
+    context.stroke();
+    context.restore();
+    promotionDragStart = point;
+    if (promotionTextOverlays.length || promotionGraphicOverlays.length) renderPromotionTextOverlays();
+    return;
+  }
+  if (promotionResizingTextIndex >= 0 && promotionTextResizeStart && promotionCropCanvas && !promotionCropCanvas.hidden) {
+    const point = getPromotionCanvasPoint(event);
+    const delta = ((point.x - promotionTextResizeStart.x) + (point.y - promotionTextResizeStart.y)) / 2;
+    promotionTextOverlays[promotionResizingTextIndex].fontSize = Math.max(16, Math.min(180, promotionTextResizeStart.fontSize + delta * 0.6));
+    renderPromotionTextOverlays();
+    return;
+  }
+  if (promotionDraggingGraphicIndex >= 0 && promotionGraphicDragOffset && promotionCropCanvas && !promotionCropCanvas.hidden) {
+    const point = getPromotionCanvasPoint(event);
+    const item = promotionGraphicOverlays[promotionDraggingGraphicIndex];
+    item.x = point.x - promotionGraphicDragOffset.x;
+    item.y = point.y - promotionGraphicDragOffset.y;
+    renderPromotionTextOverlays();
+    return;
+  }
+  if (promotionResizingGraphicIndex >= 0 && promotionGraphicResizeStart && promotionCropCanvas && !promotionCropCanvas.hidden) {
+    const point = getPromotionCanvasPoint(event);
+    const item = promotionGraphicOverlays[promotionResizingGraphicIndex];
+    item.width = Math.max(12, promotionGraphicResizeStart.width + (point.x - promotionGraphicResizeStart.x));
+    item.height = Math.max(12, promotionGraphicResizeStart.height + (point.y - promotionGraphicResizeStart.y));
+    renderPromotionTextOverlays();
+    return;
+  }
+  if (promotionDraggingTextIndex < 0 || !promotionTextDragOffset || !promotionCropCanvas || promotionCropCanvas.hidden) return;
+  const point = getPromotionCanvasPoint(event);
+  promotionTextOverlays[promotionDraggingTextIndex].x = point.x - promotionTextDragOffset.x;
+  promotionTextOverlays[promotionDraggingTextIndex].y = point.y - promotionTextDragOffset.y;
+  renderPromotionTextOverlays();
+}
+
+function downloadPromotionImage() {
+  if ((!promotionCropCanvas || promotionCropCanvas.hidden) && !ensurePromotionCanvasFromVisibleImage()) {
     showPromotionStatus("먼저 이미지를 크롭하거나 이름/연락처를 넣어주세요.");
     return;
   }
@@ -1797,6 +2748,836 @@ function downloadPromotionImage() {
   document.body.append(link);
   link.click();
   link.remove();
+}
+
+function getStoredPromotionImages() {
+  const images = readJsonStorage(getScopedStorageKey(promotionSavedImagesStorageKey), []);
+  return Array.isArray(images) ? images : [];
+}
+
+function setStoredPromotionImages(images) {
+  localStorage.setItem(getScopedStorageKey(promotionSavedImagesStorageKey), JSON.stringify(Array.isArray(images) ? images : []));
+}
+
+function openPromotionImageDatabase() {
+  if (promotionImageDbPromise) return promotionImageDbPromise;
+  promotionImageDbPromise = new Promise((resolve, reject) => {
+    const request = indexedDB.open("insurancePromotionImages", 1);
+    request.onupgradeneeded = () => {
+      const database = request.result;
+      if (!database.objectStoreNames.contains("images")) database.createObjectStore("images", { keyPath: "id" });
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+  return promotionImageDbPromise;
+}
+
+async function putPromotionImageData(image) {
+  const database = await openPromotionImageDatabase();
+  return new Promise((resolve, reject) => {
+    const request = database.transaction("images", "readwrite").objectStore("images").put(image);
+    request.onsuccess = () => resolve(true);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function getPromotionImageData(id) {
+  try {
+    const database = await openPromotionImageDatabase();
+    const stored = await new Promise((resolve, reject) => {
+      const request = database.transaction("images", "readonly").objectStore("images").get(id);
+      request.onsuccess = () => resolve(request.result || null);
+      request.onerror = () => reject(request.error);
+    });
+    if (stored?.dataUrl) return stored.dataUrl;
+  } catch {
+    // Older browsers fall back to the legacy localStorage record below.
+  }
+  return getStoredPromotionImages().find((item) => item.id === id)?.dataUrl || "";
+}
+
+async function deletePromotionImageData(id) {
+  try {
+    const database = await openPromotionImageDatabase();
+    await new Promise((resolve, reject) => {
+      const request = database.transaction("images", "readwrite").objectStore("images").delete(id);
+      request.onsuccess = () => resolve(true);
+      request.onerror = () => reject(request.error);
+    });
+  } catch {
+    // Metadata deletion still proceeds when IndexedDB is unavailable.
+  }
+}
+
+function createPromotionThumbnailDataUrl(dataUrl) {
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.onload = () => {
+      const canvas = document.createElement("canvas");
+      const scale = Math.min(1, 150 / Math.max(image.naturalWidth, image.naturalHeight));
+      canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+      canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+      canvas.getContext("2d").drawImage(image, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL("image/jpeg", 0.62));
+    };
+    image.onerror = () => resolve(dataUrl);
+    image.src = dataUrl;
+  });
+}
+
+async function savePromotionImageDataUrl(dataUrl, title, { render = true } = {}) {
+  const now = new Date().toISOString();
+  const id = `promotion-image-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const thumbnailDataUrl = await createPromotionThumbnailDataUrl(dataUrl);
+  let legacyDataUrl = "";
+  try {
+    await putPromotionImageData({ id, dataUrl, createdAt: now });
+  } catch {
+    legacyDataUrl = dataUrl;
+  }
+  const metadata = { id, title, thumbnailDataUrl, dataUrl: legacyDataUrl, createdAt: now };
+  const existing = getStoredPromotionImages().map((item) => ({
+    id: item.id,
+    title: item.title,
+    thumbnailDataUrl: item.thumbnailDataUrl || item.dataUrl || "",
+    dataUrl: item.thumbnailDataUrl ? "" : item.dataUrl || "",
+    createdAt: item.createdAt,
+  }));
+  setStoredPromotionImages([metadata, ...existing].slice(0, 300));
+  if (render) renderPromotionSavedImageList();
+  return metadata;
+}
+
+function renderPromotionSavedImageList() {
+  if (!promotionSavedImageList) return;
+  const images = getStoredPromotionImages();
+  promotionSavedImageList.innerHTML = "";
+  if (!images.length) {
+    const empty = document.createElement("p");
+    empty.className = "promotion-saved-empty";
+    empty.textContent = "저장된 편집 이미지가 없습니다.";
+    promotionSavedImageList.append(empty);
+    return;
+  }
+  images.slice(0, 300).forEach((image) => {
+    const row = document.createElement("div");
+    row.className = "promotion-saved-image-card";
+    const load = document.createElement("button");
+    load.type = "button";
+    load.className = "promotion-saved-image-thumb";
+    load.dataset.promotionImageLoadId = image.id;
+    load.title = image.title || "저장된 이미지 불러오기";
+    const thumbnail = document.createElement("img");
+    thumbnail.src = image.thumbnailDataUrl || image.dataUrl;
+    thumbnail.alt = image.title || "저장된 홍보 이미지";
+    load.append(thumbnail);
+    const download = document.createElement("button");
+    download.type = "button";
+    download.className = "promotion-saved-image-action";
+    download.dataset.promotionImageDownloadId = image.id;
+    download.textContent = "↓";
+    download.title = "내 컴퓨터에 저장";
+    const del = document.createElement("button");
+    del.type = "button";
+    del.className = "promotion-saved-image-action promotion-saved-delete";
+    del.dataset.promotionImageDeleteId = image.id;
+    del.textContent = "×";
+    row.append(load, download, del);
+    promotionSavedImageList.append(row);
+  });
+}
+
+async function saveEditedPromotionImage() {
+  if (!ensurePromotionCanvasFromVisibleImage()) {
+    showPromotionStatus("저장할 이미지를 먼저 올려주세요.");
+    return;
+  }
+  if (promotionTextOverlays.length || promotionGraphicOverlays.length) renderPromotionTextOverlays({ showSelection: false });
+  const dataUrl = promotionCropCanvas.toDataURL("image/png");
+  const title = `${promotionTopicInput?.value.trim() || "이미지"} / ${new Date().toLocaleString("ko-KR")}`;
+  await savePromotionImageDataUrl(dataUrl, title);
+  if (promotionTextOverlays.length || promotionGraphicOverlays.length) renderPromotionTextOverlays();
+  showPromotionStatus("이미지를 저장했습니다. 아래 작은 사진을 눌러 다시 사용할 수 있습니다.");
+}
+
+async function loadSavedPromotionImage(id) {
+  const image = getStoredPromotionImages().find((item) => item.id === id);
+  const dataUrl = await getPromotionImageData(id);
+  if (!image || !dataUrl) return;
+  const img = new Image();
+  img.onload = () => {
+    promotionTextOverlays = [];
+    promotionTextBaseCanvas = null;
+    promotionTextBaseDataUrl = "";
+    promotionSelectedTextIndex = -1;
+    promotionGraphicOverlays = [];
+    promotionSelectedGraphicIndex = -1;
+    promotionCropCanvas.width = img.naturalWidth;
+    promotionCropCanvas.height = img.naturalHeight;
+    promotionCropCanvas.getContext("2d").drawImage(img, 0, 0);
+    promotionCropCanvas.hidden = false;
+    syncPromotionCanvasToPreview();
+    if (promotionImagePreview) promotionImagePreview.hidden = true;
+    if (downloadPromotionImageButton) downloadPromotionImageButton.disabled = false;
+    promotionOriginalImageDataUrl = dataUrl;
+    showPromotionStatus("저장된 편집 이미지를 불러왔습니다.");
+  };
+  img.src = dataUrl;
+}
+
+async function downloadSavedPromotionImage(id) {
+  const image = getStoredPromotionImages().find((item) => item.id === id);
+  const dataUrl = await getPromotionImageData(id);
+  if (!image || !dataUrl) return;
+  const link = document.createElement("a");
+  link.href = dataUrl;
+  link.download = `${image.title || "promotion-image"}.png`;
+  document.body.append(link);
+  link.click();
+  link.remove();
+}
+
+async function deleteSavedPromotionImage(id) {
+  await deletePromotionImageData(id);
+  setStoredPromotionImages(getStoredPromotionImages().filter((item) => item.id !== id));
+  renderPromotionSavedImageList();
+  showPromotionStatus("저장된 편집 이미지를 삭제했습니다.");
+}
+
+function findPromotionWhiteSeparators(source, sourceWidth, sourceHeight) {
+  const scanCanvas = document.createElement("canvas");
+  const scale = Math.min(1, 1200 / Math.max(sourceWidth, sourceHeight));
+  scanCanvas.width = Math.max(1, Math.round(sourceWidth * scale));
+  scanCanvas.height = Math.max(1, Math.round(sourceHeight * scale));
+  const context = scanCanvas.getContext("2d", { willReadFrequently: true });
+  context.drawImage(source, 0, 0, scanCanvas.width, scanCanvas.height);
+  const pixels = context.getImageData(0, 0, scanCanvas.width, scanCanvas.height).data;
+  const scanDirection = (direction) => {
+    const length = direction === "vertical" ? scanCanvas.width : scanCanvas.height;
+    const crossLength = direction === "vertical" ? scanCanvas.height : scanCanvas.width;
+    const candidates = [];
+    let runStart = -1;
+    for (let position = 1; position < length - 1; position += 1) {
+      let whiteCount = 0;
+      let sampleCount = 0;
+      for (let cross = 0; cross < crossLength; cross += 3) {
+        const x = direction === "vertical" ? position : cross;
+        const y = direction === "vertical" ? cross : position;
+        const offset = (y * scanCanvas.width + x) * 4;
+        const r = pixels[offset];
+        const g = pixels[offset + 1];
+        const b = pixels[offset + 2];
+        if (r >= 242 && g >= 242 && b >= 242 && Math.max(r, g, b) - Math.min(r, g, b) <= 14) whiteCount += 1;
+        sampleCount += 1;
+      }
+      const isSeparator = sampleCount > 0 && whiteCount / sampleCount >= 0.88;
+      if (isSeparator && runStart < 0) runStart = position;
+      if ((!isSeparator || position === length - 2) && runStart >= 0) {
+        const runEnd = isSeparator ? position + 1 : position;
+        if (runEnd - runStart >= 2) candidates.push({ start: runStart, end: runEnd, center: (runStart + runEnd) / 2 });
+        runStart = -1;
+      }
+    }
+    const findNear = (target, excluded = null) => candidates
+      .filter((candidate) => candidate !== excluded && Math.abs(candidate.center - target) <= length * 0.22)
+      .sort((a, b) => Math.abs(a.center - target) - Math.abs(b.center - target))[0] || null;
+    const first = findNear(length / 3);
+    const second = findNear((length * 2) / 3, first);
+    if (!first || !second || first.center >= second.center) return null;
+    return {
+      direction,
+      separators: [first, second],
+      fit: (Math.abs(first.center - length / 3) + Math.abs(second.center - length * 2 / 3)) / length,
+    };
+  };
+  const matches = [scanDirection("vertical"), scanDirection("horizontal")].filter(Boolean).sort((a, b) => a.fit - b.fit);
+  if (!matches.length) return null;
+  const match = matches[0];
+  const restoreScale = 1 / scale;
+  const sourceLength = match.direction === "vertical" ? sourceWidth : sourceHeight;
+  return {
+    direction: match.direction,
+    separators: match.separators.map((separator) => ({
+      start: Math.max(0, Math.round(separator.start * restoreScale)),
+      end: Math.min(sourceLength, Math.round(separator.end * restoreScale)),
+    })),
+  };
+}
+
+async function splitPromotionImageIntoThree() {
+  let source = null;
+  let sourceWidth = 0;
+  let sourceHeight = 0;
+  if (promotionCropCanvas && !promotionCropCanvas.hidden && promotionCropCanvas.width && promotionCropCanvas.height) {
+    source = promotionCropCanvas;
+    sourceWidth = promotionCropCanvas.width;
+    sourceHeight = promotionCropCanvas.height;
+  } else if (promotionImagePreview?.src && promotionImagePreview.naturalWidth && promotionImagePreview.naturalHeight) {
+    source = promotionImagePreview;
+    sourceWidth = promotionImagePreview.naturalWidth;
+    sourceHeight = promotionImagePreview.naturalHeight;
+  }
+  if (!source || !sourceWidth || !sourceHeight) {
+    showPromotionStatus("세 장으로 나눌 이미지를 먼저 업로드해 주세요.");
+    return;
+  }
+
+  showPromotionStatus("이미지를 3장으로 나누고 크기를 맞추는 중입니다...");
+  const separatorMatch = findPromotionWhiteSeparators(source, sourceWidth, sourceHeight);
+  const direction = separatorMatch?.direction || (sourceWidth >= sourceHeight ? "vertical" : "horizontal");
+  const sourceLength = direction === "vertical" ? sourceWidth : sourceHeight;
+  const thirdLength = sourceLength / 3;
+  const separators = separatorMatch?.separators;
+  const parts = separators
+    ? [
+        { start: 0, end: separators[0].start },
+        { start: separators[0].end, end: separators[1].start },
+        { start: separators[1].end, end: sourceLength },
+      ]
+    : [
+        { start: 0, end: thirdLength },
+        { start: thirdLength, end: thirdLength * 2 },
+        { start: thirdLength * 2, end: sourceLength },
+      ];
+  const target = promotionSplitSizeInput?.value || "blog";
+  const baseTitle = promotionTopicInput?.value.trim() || "분할 이미지";
+  for (let part = 0; part < 3; part += 1) {
+    const output = document.createElement("canvas");
+    let sx = direction === "vertical" ? parts[part].start : 0;
+    let sy = direction === "horizontal" ? parts[part].start : 0;
+    let sw = direction === "vertical" ? Math.max(1, parts[part].end - parts[part].start) : sourceWidth;
+    let sh = direction === "horizontal" ? Math.max(1, parts[part].end - parts[part].start) : sourceHeight;
+    if (target !== "blog") {
+      output.width = 1080;
+      output.height = target === "instagram" ? 1350 : 1920;
+      const targetRatio = output.width / output.height;
+      const sourceRatio = sw / sh;
+      if (sourceRatio > targetRatio) {
+        const nextWidth = sh * targetRatio;
+        sx += (sw - nextWidth) / 2;
+        sw = nextWidth;
+      } else {
+        const nextHeight = sw / targetRatio;
+        sy = (sh - nextHeight) / 2;
+        sh = nextHeight;
+      }
+    } else {
+      output.width = 1200;
+      output.height = Math.max(1, Math.round(1200 * (sh / sw)));
+    }
+    output.getContext("2d").drawImage(source, sx, sy, sw, sh, 0, 0, output.width, output.height);
+    const dataUrl = output.toDataURL("image/jpeg", 0.9);
+    await savePromotionImageDataUrl(dataUrl, `${baseTitle} ${part + 1}`, { render: false });
+  }
+  renderPromotionSavedImageList();
+  const targetLabel = target === "instagram" ? "인스타그램" : target === "shorts" ? "쇼츠" : target === "reels" ? "릴스" : "블로그";
+  const directionLabel = direction === "vertical" ? "세로선" : "가로선";
+  const fallbackLabel = direction === "vertical" ? "너비" : "높이";
+  showPromotionStatus(separators ? `흰색 ${directionLabel}을 찾아 3장으로 쪼개 저장했습니다.` : `${targetLabel} 크기로 3등분해 저장했습니다. 흰 선을 찾지 못해 동일한 ${fallbackLabel}로 나눴습니다.`);
+}
+
+function resizePromotionImageForChannel() {
+  if (!ensurePromotionCanvasFromVisibleImage()) {
+    showPromotionStatus("사이즈를 변경할 이미지를 먼저 선택해 주세요.");
+    return;
+  }
+  if (promotionTextOverlays.length || promotionGraphicOverlays.length) renderPromotionTextOverlays({ showSelection: false });
+  pushPromotionImageHistory();
+  const source = document.createElement("canvas");
+  source.width = promotionCropCanvas.width;
+  source.height = promotionCropCanvas.height;
+  source.getContext("2d").drawImage(promotionCropCanvas, 0, 0);
+  const target = promotionSplitSizeInput?.value || "blog";
+  let targetWidth = 1200;
+  let targetHeight = Math.max(1, Math.round(1200 * (source.height / source.width)));
+  if (target === "instagram") targetHeight = 1350;
+  if (target === "shorts" || target === "reels") targetHeight = 1920;
+  let sx = 0;
+  let sy = 0;
+  let sw = source.width;
+  let sh = source.height;
+  if (target !== "blog") {
+    targetWidth = 1080;
+    const targetRatio = targetWidth / targetHeight;
+    const sourceRatio = sw / sh;
+    if (sourceRatio > targetRatio) {
+      const nextWidth = sh * targetRatio;
+      sx = (sw - nextWidth) / 2;
+      sw = nextWidth;
+    } else {
+      const nextHeight = sw / targetRatio;
+      sy = (sh - nextHeight) / 2;
+      sh = nextHeight;
+    }
+  }
+  promotionCropCanvas.width = targetWidth;
+  promotionCropCanvas.height = targetHeight;
+  promotionCropCanvas.getContext("2d").drawImage(source, sx, sy, sw, sh, 0, 0, targetWidth, targetHeight);
+  promotionTextOverlays = [];
+  promotionGraphicOverlays = [];
+  promotionTextBaseCanvas = null;
+  promotionTextBaseDataUrl = "";
+  promotionSelectedTextIndex = -1;
+  promotionSelectedGraphicIndex = -1;
+  syncPromotionCanvasToPreview();
+  if (promotionImagePreview) promotionImagePreview.hidden = true;
+  const targetLabel = target === "instagram" ? "인스타그램" : target === "shorts" ? "쇼츠" : target === "reels" ? "릴스" : "블로그";
+  showPromotionStatus(`${targetLabel}용 이미지 크기로 변경했습니다.`);
+}
+
+function collectPromotionCase() {
+  return {
+    who: promotionCaseWhoInput?.value.trim() || "",
+    when: promotionCaseWhenInput?.value.trim() || "",
+    where: promotionCaseWhereInput?.value.trim() || "",
+    how: promotionCaseHowInput?.value.trim() || "",
+    amount: promotionCaseAmountInput?.value.trim() || "",
+    detail: promotionCaseDetailInput?.value.trim() || "",
+  };
+}
+
+function buildPromotionCaseText(caseItem = collectPromotionCase()) {
+  const topic = promotionTopicInput?.value.trim() || "보험 점검";
+  const storyParts = [
+    caseItem.when && `${caseItem.when}에`,
+    caseItem.who || "한 고객님이",
+    caseItem.where && `${caseItem.where}에서`,
+    caseItem.how && `${caseItem.how} 방식으로 확인하던 중`,
+  ].filter(Boolean).join(" ");
+  return [
+    `${storyParts || "한 고객님의 사례를 바탕으로"} ${topic} 관련 내용을 다시 살펴보게 되었습니다.`,
+    "",
+    caseItem.detail || "처음에는 단순한 확인 정도로 생각했지만, 실제로는 가입해둔 담보와 현재 상황을 하나씩 맞춰보는 과정이 필요했습니다.",
+    caseItem.amount ? `확인 결과 약 ${caseItem.amount} 정도의 중요한 포인트가 발견되었습니다.` : "확인 과정에서 놓치기 쉬운 보장, 청구 가능성, 필요한 서류가 하나씩 정리되었습니다.",
+    "",
+    "이런 사례에서 중요한 건 ‘보험을 많이 가입했는지’보다 ‘내 상황에 맞게 제대로 작동하는지’를 보는 것입니다.",
+    "진단비, 수술비, 입원비, 실손, 후유장해처럼 항목별로 나누어 보면 평소에는 잘 보이지 않던 부분이 드러나는 경우가 많습니다.",
+    "",
+    "그래서 상담 글에서는 겁을 주기보다, 고객이 자신의 상황을 편하게 떠올릴 수 있도록 차분하게 안내하는 흐름이 좋습니다.",
+    "필요한 부분은 확인하고, 부족한 부분은 보완하고, 받을 수 있는 부분은 놓치지 않도록 점검해보자는 메시지로 마무리하면 자연스럽습니다.",
+  ].filter(Boolean).join("\n");
+}
+
+function generatePromotionCaseText() {
+  if (!promotionCaseOutput) return;
+  promotionCaseOutput.value = buildPromotionCaseText();
+  showPromotionStatus("사례를 글로 풀었습니다.");
+}
+
+function getStoredPromotionCases() {
+  const cases = readJsonStorage(getScopedStorageKey(promotionCasesStorageKey), []);
+  return Array.isArray(cases) ? cases : [];
+}
+
+function setStoredPromotionCases(cases) {
+  localStorage.setItem(getScopedStorageKey(promotionCasesStorageKey), JSON.stringify(Array.isArray(cases) ? cases : []));
+}
+
+function renderPromotionCaseList() {
+  if (!promotionCaseList) return;
+  const cases = getStoredPromotionCases();
+  promotionCaseList.innerHTML = "";
+  if (!cases.length) {
+    const empty = document.createElement("p");
+    empty.className = "promotion-saved-empty";
+    empty.textContent = "저장된 사례가 없습니다.";
+    promotionCaseList.append(empty);
+    return;
+  }
+  cases.slice(0, 60).forEach((item) => {
+    const row = document.createElement("div");
+    row.className = "promotion-saved-row";
+    const load = document.createElement("button");
+    load.type = "button";
+    load.className = "promotion-saved-load";
+    load.dataset.promotionCaseLoadId = item.id;
+    load.textContent = [item.who || "사례", item.amount, item.when].filter(Boolean).join(" / ");
+    const copy = document.createElement("button");
+    copy.type = "button";
+    copy.className = "promotion-saved-copy";
+    copy.dataset.promotionCaseCopyId = item.id;
+    copy.textContent = "복사";
+    const del = document.createElement("button");
+    del.type = "button";
+    del.className = "promotion-saved-delete";
+    del.dataset.promotionCaseDeleteId = item.id;
+    del.textContent = "×";
+    row.append(load, copy, del);
+    promotionCaseList.append(row);
+  });
+}
+
+function savePromotionCase() {
+  const data = collectPromotionCase();
+  const text = promotionCaseOutput?.value.trim() || buildPromotionCaseText(data);
+  const now = new Date().toISOString();
+  const item = { id: `promotion-case-${Date.now()}-${Math.random().toString(16).slice(2)}`, ...data, text, createdAt: now, updatedAt: now };
+  setStoredPromotionCases([item, ...getStoredPromotionCases()]);
+  renderPromotionCaseList();
+  showPromotionStatus("사례를 저장했습니다.");
+}
+
+function loadPromotionCase(id) {
+  const item = getStoredPromotionCases().find((caseItem) => caseItem.id === id);
+  if (!item) return;
+  if (promotionCaseWhoInput) promotionCaseWhoInput.value = item.who || "";
+  if (promotionCaseWhenInput) promotionCaseWhenInput.value = item.when || "";
+  if (promotionCaseWhereInput) promotionCaseWhereInput.value = item.where || "";
+  if (promotionCaseHowInput) promotionCaseHowInput.value = item.how || "";
+  if (promotionCaseAmountInput) promotionCaseAmountInput.value = item.amount || "";
+  if (promotionCaseDetailInput) promotionCaseDetailInput.value = item.detail || "";
+  if (promotionCaseOutput) promotionCaseOutput.value = item.text || buildPromotionCaseText(item);
+  showPromotionStatus("저장된 사례를 불러왔습니다.");
+}
+
+function copyPromotionCase(id = "") {
+  const item = id ? getStoredPromotionCases().find((caseItem) => caseItem.id === id) : null;
+  const text = item?.text || promotionCaseOutput?.value.trim() || buildPromotionCaseText();
+  copyText(text, "사례 글 복사 완료");
+}
+
+function deletePromotionCase(id) {
+  setStoredPromotionCases(getStoredPromotionCases().filter((item) => item.id !== id));
+  renderPromotionCaseList();
+  showPromotionStatus("저장된 사례를 삭제했습니다.");
+}
+
+function getStoredPromotionIdeas() {
+  const ideas = readJsonStorage(getScopedStorageKey(promotionIdeasStorageKey), []);
+  return Array.isArray(ideas) ? ideas : [];
+}
+
+function setStoredPromotionIdeas(ideas) {
+  localStorage.setItem(getScopedStorageKey(promotionIdeasStorageKey), JSON.stringify(Array.isArray(ideas) ? ideas : []));
+}
+
+function renderPromotionIdeaList() {
+  if (!promotionIdeaList) return;
+  const ideas = getStoredPromotionIdeas();
+  promotionIdeaList.innerHTML = "";
+  if (!ideas.length) {
+    const empty = document.createElement("p");
+    empty.className = "promotion-saved-empty";
+    empty.textContent = "저장된 글감이 없습니다.";
+    promotionIdeaList.append(empty);
+    return;
+  }
+  ideas.slice(0, 80).forEach((idea) => {
+    const row = document.createElement("div");
+    row.className = "promotion-saved-row promotion-idea-row";
+    const load = document.createElement("button");
+    load.type = "button";
+    load.className = "promotion-saved-load";
+    load.dataset.promotionIdeaLoadId = idea.id;
+    const preview = [idea.text || "", idea.url ? `링크: ${idea.url}` : "", idea.imageName ? `이미지: ${idea.imageName}` : ""].filter(Boolean).join(" / ");
+    load.textContent = preview.slice(0, 80) || "글감";
+    const del = document.createElement("button");
+    del.type = "button";
+    del.className = "promotion-saved-delete";
+    del.dataset.promotionIdeaDeleteId = idea.id;
+    del.textContent = "×";
+    row.append(load, del);
+    promotionIdeaList.append(row);
+  });
+}
+
+function cleanPromotionBlogText(rawText) {
+  const lines = String(rawText || "").replace(/\r/g, "").split("\n");
+  const cleaned = [];
+  let skippingContents = false;
+  for (const originalLine of lines) {
+    let line = originalLine.trim();
+    if (!line) {
+      if (cleaned.length && cleaned[cleaned.length - 1] !== "") cleaned.push("");
+      continue;
+    }
+    if (/^(Title|URL Source|Published Time|Markdown Content):/i.test(line)) continue;
+    if (/^(#{1,6}\s*)?(목차|contents?|table of contents)\s*:?$/i.test(line)) {
+      skippingContents = true;
+      continue;
+    }
+    if (skippingContents) {
+      if (/^#{1,6}\s+/.test(line) && !/\[[^\]]+\]\([^)]+\)/.test(line)) skippingContents = false;
+      else continue;
+    }
+    if (/^(#{1,6}\s*)?(같이 보면 좋은 글|당신을 위한 추천|추천 글|관련 글|인기 글|최신 글|이 글도 읽어보세요|댓글)\s*$/i.test(line)) break;
+    if (/^!\[[^\]]*\]\([^)]+\)$/.test(line)) continue;
+
+    const markdownLinks = line.match(/\[[^\]]+\]\([^)]+\)/g) || [];
+    if (markdownLinks.length) {
+      const remainder = line
+        .replace(/\[[^\]]+\]\([^)]+\)/g, "")
+        .replace(/[\s*+\-–—•·\d.():]+/g, "");
+      if (!remainder) continue;
+      line = line.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1");
+    }
+
+    line = line
+      .replace(/<[^>]+>/g, " ")
+      .replace(/https?:\/\/\S+/g, "")
+      .replace(/^#{1,6}\s+/, "")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+    if (!line || /^(menu|search|로그인|회원가입|카테고리|태그|공유하기)$/i.test(line)) continue;
+    if (cleaned[cleaned.length - 1] !== line) cleaned.push(line);
+  }
+  return cleaned.join("\n").replace(/\n{3,}/g, "\n\n").trim().slice(0, 40000);
+}
+
+async function extractPromotionBlogText() {
+  const rawUrl = promotionIdeaUrlInput?.value.trim() || "";
+  if (!rawUrl) {
+    showPromotionStatus("블로그 링크를 먼저 붙여넣어 주세요.");
+    promotionIdeaUrlInput?.focus();
+    return "";
+  }
+  let url;
+  try {
+    url = new URL(rawUrl);
+  } catch {
+    showPromotionStatus("올바른 블로그 링크를 입력해 주세요.");
+    return "";
+  }
+  if (!/^https?:$/.test(url.protocol)) {
+    showPromotionStatus("http 또는 https 블로그 링크만 사용할 수 있습니다.");
+    return "";
+  }
+  showPromotionStatus("블로그 글을 가져오는 중입니다...");
+  try {
+    const response = await fetch(`https://r.jina.ai/${url.href}`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const extracted = cleanPromotionBlogText(await response.text());
+    if (!extracted) throw new Error("empty");
+    if (promotionIdeaTextInput) promotionIdeaTextInput.value = extracted;
+    showPromotionStatus("블로그에서 글만 추출했습니다.");
+    return extracted;
+  } catch {
+    showPromotionStatus("블로그 글을 가져오지 못했습니다. 공개된 글인지 링크를 확인해 주세요.");
+    return "";
+  }
+}
+
+function ensurePromotionOcrLibrary() {
+  if (window.Tesseract) return Promise.resolve(window.Tesseract);
+  if (promotionOcrScriptPromise) return promotionOcrScriptPromise;
+  promotionOcrScriptPromise = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
+    script.onload = () => window.Tesseract ? resolve(window.Tesseract) : reject(new Error("OCR load failed"));
+    script.onerror = () => reject(new Error("OCR load failed"));
+    document.head.append(script);
+  });
+  return promotionOcrScriptPromise;
+}
+
+async function extractPromotionImageText() {
+  const imageFile = promotionIdeaImageInput?.files?.[0] || null;
+  if (!imageFile) {
+    showPromotionStatus("글씨를 추출할 이미지를 먼저 선택해 주세요.");
+    return "";
+  }
+  showPromotionStatus("이미지 글씨 인식 기능을 준비하는 중입니다...");
+  try {
+    const tesseract = await ensurePromotionOcrLibrary();
+    const result = await tesseract.recognize(imageFile, "kor+eng", {
+      logger: (progress) => {
+        if (progress.status !== "recognizing text") return;
+        const percent = Math.round(Number(progress.progress || 0) * 100);
+        showPromotionStatus(`이미지에서 글씨를 읽는 중입니다... ${percent}%`);
+      },
+    });
+    const text = String(result?.data?.text || "").replace(/\n{3,}/g, "\n\n").trim();
+    if (!text) throw new Error("empty OCR result");
+    if (promotionIdeaTextInput) promotionIdeaTextInput.value = text;
+    showPromotionStatus("이미지에서 글만 추출했습니다.");
+    return text;
+  } catch {
+    showPromotionStatus("이미지 글씨를 읽지 못했습니다. 선명한 이미지로 다시 시도해 주세요.");
+    return "";
+  }
+}
+
+async function savePromotionIdea() {
+  let text = promotionIdeaTextInput?.value.trim() || "";
+  const imageFile = promotionIdeaImageInput?.files?.[0] || null;
+  if (!text && imageFile) text = await extractPromotionImageText();
+  if (!text) {
+    showPromotionStatus("추출하거나 저장할 글을 먼저 넣어주세요.");
+    promotionIdeaTextInput?.focus();
+    return;
+  }
+  const now = new Date().toISOString();
+  const idea = {
+    id: `promotion-idea-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    text,
+    url: promotionIdeaUrlInput?.value.trim() || "",
+    createdAt: now,
+  };
+  setStoredPromotionIdeas([idea, ...getStoredPromotionIdeas()].slice(0, 80));
+  if (promotionIdeaTextInput) promotionIdeaTextInput.value = "";
+  if (promotionIdeaUrlInput) promotionIdeaUrlInput.value = "";
+  if (promotionIdeaImageInput) promotionIdeaImageInput.value = "";
+  renderPromotionIdeaList();
+  showPromotionStatus("추출한 글감을 저장했습니다. 다음 글 작성 때 참고합니다.");
+}
+
+function loadPromotionIdea(id) {
+  const idea = getStoredPromotionIdeas().find((item) => item.id === id);
+  if (!idea) return;
+  if (promotionIdeaTextInput) promotionIdeaTextInput.value = idea.text || "";
+  if (promotionIdeaUrlInput) promotionIdeaUrlInput.value = idea.url || "";
+  showPromotionStatus("저장된 글감을 불러왔습니다.");
+}
+
+function deletePromotionIdea(id) {
+  setStoredPromotionIdeas(getStoredPromotionIdeas().filter((item) => item.id !== id));
+  renderPromotionIdeaList();
+  showPromotionStatus("저장된 글감을 삭제했습니다.");
+}
+
+function getPromotionIdeaContext() {
+  const ideas = getStoredPromotionIdeas();
+  return ideas
+    .slice(0, 30)
+    .map((idea, index) => {
+      const parts = [];
+      if (idea.text) parts.push(idea.text);
+      if (idea.imageName) parts.push(`이미지 참고 ${index + 1}: ${idea.imageName}`);
+      return parts.join("\n");
+    })
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+function getPromotionCaseContext() {
+  const current = collectPromotionCase();
+  if (Object.values(current).some(Boolean)) return buildPromotionCaseText(current);
+  const latest = getStoredPromotionCases()[0];
+  return latest?.text || "";
+}
+
+function getPromotionEmojiBank() {
+  return Array.from({ length: 98 }, (_, index) => String(index));
+}
+
+function getSelectedPromotionEmojis() {
+  const selected = readJsonStorage(getScopedStorageKey(promotionSelectedEmojisStorageKey), []);
+  const available = new Set(getPromotionEmojiBank());
+  return Array.isArray(selected) ? selected.filter((emoji) => available.has(emoji)) : [];
+}
+
+function setSelectedPromotionEmojis(emojis) {
+  localStorage.setItem(getScopedStorageKey(promotionSelectedEmojisStorageKey), JSON.stringify(Array.isArray(emojis) ? emojis : []));
+}
+
+function getPromotionEmojiLine() {
+  return "";
+}
+
+function setPromotionEmojiSpritePosition(element, emojiIndex) {
+  const index = Number(emojiIndex);
+  const column = index % 7;
+  const row = Math.floor(index / 7);
+  element.style.setProperty("--emoji-x", `${(column / 6) * 100}%`);
+  element.style.setProperty("--emoji-y", `${(row / 13) * 100}%`);
+}
+
+function renderSelectedPromotionEmojiPreview() {
+  if (!promotionSelectedEmojiPreview) return;
+  promotionSelectedEmojiPreview.innerHTML = "";
+  getSelectedPromotionEmojis().forEach((emojiIndex) => {
+    const preview = document.createElement("span");
+    preview.className = "promotion-emoji-sprite promotion-emoji-preview-item";
+    setPromotionEmojiSpritePosition(preview, emojiIndex);
+    promotionSelectedEmojiPreview.append(preview);
+  });
+}
+
+function renderPromotionEmojiBank() {
+  if (!promotionEmojiBank) return;
+  promotionEmojiBank.innerHTML = "";
+  const selected = new Set(getSelectedPromotionEmojis());
+  getPromotionEmojiBank().forEach((emoji) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "promotion-emoji-button";
+    button.dataset.promotionEmoji = emoji;
+    button.classList.add("promotion-emoji-sprite");
+    setPromotionEmojiSpritePosition(button, emoji);
+    button.classList.toggle("selected", selected.has(emoji));
+    button.setAttribute("aria-pressed", selected.has(emoji) ? "true" : "false");
+    button.title = selected.has(emoji) ? `이미지 이모티콘 ${Number(emoji) + 1} 선택 해제` : `이미지 이모티콘 ${Number(emoji) + 1} 선택`;
+    promotionEmojiBank.append(button);
+  });
+  renderSelectedPromotionEmojiPreview();
+}
+
+function togglePromotionEmoji(emoji) {
+  if (!emoji) return;
+  const selected = getSelectedPromotionEmojis();
+  const next = selected.includes(emoji)
+    ? selected.filter((item) => item !== emoji)
+    : [...selected, emoji];
+  setSelectedPromotionEmojis(next);
+  renderPromotionEmojiBank();
+  showPromotionStatus(next.includes(emoji) ? "이미지 이모티콘을 선택했습니다." : "이미지 이모티콘 선택을 해제했습니다.");
+}
+
+async function copySelectedPromotionEmojiImage() {
+  const selected = getSelectedPromotionEmojis();
+  if (!selected.length) {
+    showPromotionStatus("복사할 이미지 이모티콘을 먼저 선택해 주세요.");
+    return;
+  }
+  const sprite = new Image();
+  sprite.onload = async () => {
+    const columns = 7;
+    const rows = 14;
+    const cellWidth = sprite.naturalWidth / columns;
+    const cellHeight = sprite.naturalHeight / rows;
+    const output = document.createElement("canvas");
+    output.width = Math.round(cellWidth * selected.length);
+    output.height = Math.round(cellHeight);
+    const context = output.getContext("2d");
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, output.width, output.height);
+    selected.forEach((emojiIndex, index) => {
+      const number = Number(emojiIndex);
+      const sourceX = (number % columns) * cellWidth;
+      const sourceY = Math.floor(number / columns) * cellHeight;
+      context.drawImage(sprite, sourceX, sourceY, cellWidth, cellHeight, index * cellWidth, 0, cellWidth, cellHeight);
+    });
+    output.toBlob(async (blob) => {
+      if (!blob) return;
+      try {
+        if (!navigator.clipboard?.write || typeof ClipboardItem === "undefined") throw new Error("clipboard unavailable");
+        await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+        showPromotionStatus("선택한 이미지 이모티콘을 복사했습니다. 블로그에 Ctrl+V로 붙여넣으세요.");
+      } catch {
+        const link = document.createElement("a");
+        link.href = output.toDataURL("image/png");
+        link.download = `blog-emoji-${Date.now()}.png`;
+        link.click();
+        showPromotionStatus("클립보드 복사가 제한되어 이미지 파일로 저장했습니다.");
+      }
+    }, "image/png");
+  };
+  sprite.src = "./assets/blog-emoji-sprite.png";
+}
+
+function handlePromotionScreenshotPaste(event) {
+  const items = [...(event.clipboardData?.items || [])];
+  const imageItem = items.find((item) => item.type.startsWith("image/"));
+  if (!imageItem) return;
+  event.preventDefault();
+  const blob = imageItem.getAsFile();
+  loadPromotionImageBlob(blob, "스크린샷을 이미지로 불러왔습니다. 바로 크롭할 수 있어요.");
+}
+
+function focusPromotionScreenshotPasteZone() {
+  promotionScreenshotPasteZone?.focus();
+  showPromotionStatus("이제 Ctrl+V로 스크린샷을 붙여넣으세요.");
 }
 
 function openPromotionSearch(site) {
@@ -1809,8 +3590,11 @@ function openPromotionSearch(site) {
   const encoded = encodeURIComponent(query);
   const url = site === "pinterest"
     ? `https://www.pinterest.com/search/pins/?q=${encoded}`
-    : `https://search.naver.com/search.naver?query=${encoded}`;
+    : site === "google"
+      ? `https://www.google.com/search?tbm=isch&q=${encoded}`
+      : `https://search.naver.com/search.naver?where=image&sm=tab_jum&query=${encoded}`;
   window.open(url, "_blank", "noopener,noreferrer");
+  showPromotionStatus("검색 새창을 열었습니다. 원하는 이미지를 캡쳐한 뒤 Ctrl+V로 붙여넣으세요.");
 }
 
 function getPromotionImageHint() {
@@ -1934,31 +3718,32 @@ function buildPromotionCopyLegacy() {
 
 function getPromotionToneConfig() {
   const tone = promotionToneInput?.value || "cute";
-  return {
+  const config = {
     cute: {
-      label: "귀엽게 😊",
-      intro: "살짝 귀엽고 편하게 알려드릴게요 😊",
-      closing: "궁금하시면 편하게 톡 남겨주세요. 제가 차근차근 같이 봐드릴게요 🫶",
-      emoji: "✨",
+      label: "귀엽게",
+      intro: "살짝 귀엽고 편하게 알려드릴게요.",
+      closing: "궁금하시면 편하게 톡 남겨주세요. 제가 차근차근 같이 봐드릴게요.",
+      emoji: "",
     },
     feminine: {
-      label: "여성스럽게 🌷",
-      intro: "부드럽고 차분하게 꼭 필요한 부분만 정리해드릴게요 🌷",
-      closing: "필요하신 분은 편하게 문의 주세요. 상황에 맞춰 꼼꼼히 확인해드릴게요 🤍",
-      emoji: "🌿",
+      label: "여성스럽게",
+      intro: "부드럽고 차분하게 꼭 필요한 부분만 정리해드릴게요.",
+      closing: "필요하신 분은 편하게 문의 주세요. 상황에 맞춰 꼼꼼히 확인해드릴게요.",
+      emoji: "",
     },
     expert: {
-      label: "전문가스럽게 📌",
-      intro: "전문가 관점에서 핵심만 정확히 짚어드리겠습니다 📌",
+      label: "전문가스럽게",
+      intro: "전문가 관점에서 핵심만 정확히 짚어드리겠습니다.",
       closing: "가입증권과 약관 기준으로 확인해야 정확합니다. 필요한 부분은 상담으로 점검해드리겠습니다.",
-      emoji: "✅",
+      emoji: "",
     },
   }[tone] || {
-    label: "귀엽게 😊",
-    intro: "살짝 귀엽고 편하게 알려드릴게요 😊",
-    closing: "궁금하시면 편하게 톡 남겨주세요. 제가 차근차근 같이 봐드릴게요 🫶",
-    emoji: "✨",
+    label: "귀엽게",
+    intro: "살짝 귀엽고 편하게 알려드릴게요.",
+    closing: "궁금하시면 편하게 톡 남겨주세요. 제가 차근차근 같이 봐드릴게요.",
+    emoji: "",
   };
+  return config;
 }
 
 function getPromotionLengthBlocks(topic, multiplier, toneConfig) {
@@ -1979,11 +3764,14 @@ function getPromotionLengthBlocks(topic, multiplier, toneConfig) {
   return blocks;
 }
 
-function buildPromotionVariant({ variant, topic, channel, comment, memoLine, imageLine, consultationLine, toneConfig, multiplier }) {
+function buildPromotionVariant({ variant, topic, channel, comment, memoLine, sourceLine, imageLine, consultationLine, toneConfig, multiplier }) {
   const channelGuide = {
     blog: "블로그용",
     instagram: "인스타그램용",
     kin: "지식인 답변용",
+    carrot: "당근 게시글용",
+    youtube_shorts: "유튜브 쇼츠용",
+    reels: "릴스용",
   }[channel] || "홍보용";
   const title = variant === 1
     ? `[1안] ${topic}, 지금 한 번 확인해보세요`
@@ -2016,6 +3804,7 @@ function buildPromotionVariant({ variant, topic, channel, comment, memoLine, ima
     ...checklist,
     "",
     toneConfig.closing,
+    sourceLine,
     consultationLine,
     memoLine,
     imageLine,
@@ -2027,26 +3816,61 @@ function buildPromotionVariant({ variant, topic, channel, comment, memoLine, ima
 function buildPromotionCopy() {
   const channel = promotionChannelInput?.value || "blog";
   const topic = promotionTopicInput?.value.trim() || getPromotionImageHint() || "보험 점검";
-  const memo = promotionMemoInput?.value.trim();
+  const ideaText = getPromotionIdeaContext();
+  const caseText = getPromotionCaseContext();
   const comment = promotionCommentInput?.value.trim();
-  const imageHint = getPromotionImageHint();
-  const memoLine = memo ? `\n\n추가 포인트: ${memo}` : "";
-  const imageLine = imageHint ? `\n이미지 참고 키워드: ${imageHint}` : "";
-  const consultationLine = getPromotionConsultationReference();
   const toneConfig = getPromotionToneConfig();
   const multiplier = Math.max(1, Math.min(3, Number(promotionLengthInput?.value || 1)));
-
+  const channelLabel = {
+    blog: "네이버 블로그",
+    instagram: "인스타그램",
+    kin: "네이버 지식인",
+    carrot: "당근",
+    youtube_shorts: "유튜브 쇼츠",
+    reels: "릴스",
+  }[channel] || "네이버 블로그";
+  const imageGuide = {
+    blog: { target: "블로그", ratio: "16:9", size: "1200×675px" },
+    instagram: { target: "인스타그램", ratio: "4:5", size: "1080×1350px" },
+    kin: { target: "네이버 지식인", ratio: "4:3", size: "1200×900px" },
+    carrot: { target: "당근", ratio: "1:1", size: "1080×1080px" },
+    youtube_shorts: { target: "유튜브 쇼츠", ratio: "9:16", size: "1080×1920px" },
+    reels: { target: "릴스", ratio: "9:16", size: "1080×1920px" },
+  }[channel] || { target: "블로그", ratio: "16:9", size: "1200×675px" };
+  const lengthLabel = multiplier === 3 ? "기본 글의 3배 분량" : multiplier === 2 ? "기본 글의 2배 분량" : "읽기 편한 기본 분량";
+  const materials = [
+    caseText ? `[자료 1 - 사례]\n${caseText}` : "",
+    ideaText ? `[자료 2 - 블로그에서 추출한 글감]\n${ideaText}` : "",
+  ].filter(Boolean).join("\n\n");
+  const materialText = materials || `[자료]\n주제: ${topic}`;
   return [
-    buildPromotionVariant({ variant: 1, topic, channel, comment, memoLine, imageLine, consultationLine, toneConfig, multiplier }),
-    "\n\n────────────────────\n",
-    buildPromotionVariant({ variant: 2, topic, channel, comment, memoLine, imageLine, consultationLine, toneConfig, multiplier }),
-  ].join("");
+    `아래 자료를 바탕으로 ${channelLabel}에 게시할 홍보 글을 작성해 주세요.`,
+    "",
+    "[작성 조건]",
+    `- 핵심 주제: ${topic}`,
+    `- 문체: ${toneConfig.label}`,
+    `- 글 길이: ${lengthLabel}`,
+    "- 자료의 문장을 그대로 복사하지 말고 핵심 내용을 자연스럽게 조합해 주세요.",
+    "- 보험금 지급을 확정적으로 표현하거나 과장하지 말고, 확인과 상담이 필요하다는 방식으로 작성해 주세요.",
+    "- 제목과 본문을 포함하고 서로 다른 구성의 글 2안을 제시해 주세요.",
+    channel === "carrot" ? "- 당근 동네생활 게시글처럼 친근하고 지역 주민에게 말하듯 작성하며, 광고처럼 과도하게 보이지 않게 해 주세요." : "",
+    channel === "youtube_shorts" || channel === "reels" ? "- 짧은 세로 영상에 사용할 수 있도록 첫 문장을 강한 주목 문구로 만들고, 짧은 장면별 자막 구성도 함께 작성해 주세요." : "",
+    `- 이미지 3장을 만들어 주세요. 각 이미지는 ${imageGuide.target}용 이미지 ${imageGuide.ratio} 비율(${imageGuide.size})로 만들어 주세요.`,
+    comment ? `- 독자가 남기도록 유도할 댓글 문구: ${comment}` : "- 독자가 궁금한 점을 댓글이나 상담으로 문의하도록 자연스럽게 안내해 주세요.",
+    "",
+    materialText,
+    "",
+    "[최종 목표]",
+    "이 글을 읽은 고객이 자신의 보험과 보험금 청구 가능성을 점검해보고 싶다는 생각이 들도록 작성해 주세요. 최종적으로 고객 상담을 위해 연락이 오도록 자연스럽게 유도하는 글을 작성해 주세요.",
+    "",
+    "설명이나 작성 과정은 빼고, 바로 게시할 수 있는 완성된 글 2안만 출력해 주세요.",
+  ].join("\n");
 }
 
 function generatePromotionCopy() {
   if (!promotionOutput) return;
   promotionOutput.value = buildPromotionCopy();
-  showPromotionStatus("홍보 글 초안을 작성했습니다.");
+  showPromotionStatus("AI에 그대로 복사할 수 있는 명령어를 만들었습니다.");
 }
 
 function copyPromotionCopy() {
@@ -2089,7 +3913,13 @@ function setPromotionMode(enabled, updateHash = true) {
   if (enabled) {
     document.body.classList.remove("contract-management-mode", "design-manager-mode", "phone-consultation-mode");
     restorePromotionImageSignature();
+    updatePromotionToolColorChips();
+    renderPromotionColorPalette();
     renderPromotionSavedList();
+    renderPromotionSavedImageList();
+    renderPromotionCaseList();
+    renderPromotionIdeaList();
+    renderPromotionEmojiBank();
   }
   if (pageTitle) pageTitle.textContent = getMainPageTitle();
   if (updateHash) {
@@ -7001,13 +8831,86 @@ function bindApplicationUiEvents() {
   safeOn(copyPromotionButton, "click", copyPromotionCopy);
   safeOn(savePromotionButton, "click", savePromotionPost);
   safeOn(promotionImageInput, "change", handlePromotionImageSelected);
+  safeOn(splitPromotionImageButton, "click", splitPromotionImageIntoThree);
+  safeOn(resizePromotionImageButton, "click", resizePromotionImageForChannel);
   safeOn(cropPromotionImageButton, "click", () => drawPromotionImageToCanvas({ stamp: false }));
-  safeOn(stampPromotionImageButton, "click", () => drawPromotionImageToCanvas({ stamp: true }));
+  safeOn(flipPromotionImageButton, "click", flipPromotionImageHorizontal);
+  safeOn(undoPromotionImageButton, "click", undoPromotionImageEdit);
+  safeOn(resetPromotionImageButton, "click", resetPromotionImageToOriginal);
+  safeOn(stampPromotionImageButton, "click", addPromotionMessageText);
+  safeOn(removeStampPromotionImageButton, "click", removePromotionStamp);
+  safeOn(saveEditedPromotionImageButton, "click", saveEditedPromotionImage);
   safeOn(downloadPromotionImageButton, "click", downloadPromotionImage);
-  safeOn(promotionImageNameInput, "input", savePromotionImageSignature);
-  safeOn(promotionImagePhoneInput, "input", savePromotionImageSignature);
+  safeOn(mosaicPromotionImageButton, "click", startPromotionMosaicMode);
+  safeOn(addShapePromotionImageButton, "click", () => startPromotionShapeMode("fill"));
+  safeOn(drawShapePromotionImageButton, "click", () => startPromotionShapeMode("frame"));
+  safeOn(brushPromotionImageButton, "click", startPromotionBrushMode);
+  safeOn(selectPromotionImageButton, "click", stopPromotionImageEditMode);
+  safeOn(deletePromotionObjectButton, "click", deleteSelectedPromotionObject);
+  safeOn(promotionFrameImageInput, "change", handlePromotionFrameImageSelected);
+  safeOn(promotionCropCanvas, "mousedown", handlePromotionCanvasPointerDown);
+  safeOn(promotionCropCanvas, "mousemove", handlePromotionCanvasPointerMove);
+  safeOn(promotionCropCanvas, "mouseup", handlePromotionCanvasPointerUp);
+  safeOn(promotionCropCanvas, "mouseleave", handlePromotionCanvasPointerUp);
+  safeOn(promotionToolColorInput, "input", () => {
+    finishPromotionColorPick();
+    updateSelectedPromotionTextStyle();
+  });
+  safeOn(promotionToolOpacityInput, "input", updateSelectedPromotionTextStyle);
+  safeOn(promotionImageMessageInput, "input", savePromotionImageSignature);
+  safeOn(promotionTextColorInput, "input", () => {
+    savePromotionImageSignature();
+    updateSelectedPromotionTextStyle();
+  });
+  safeOn(promotionTextSizeInput, "input", updateSelectedPromotionTextStyle);
+  safeOn(promotionBoxColorInput, "input", () => {
+    savePromotionImageSignature();
+    updateSelectedPromotionTextStyle();
+  });
+  safeOn(promotionStampOpacityInput, "input", updateSelectedPromotionTextStyle);
+  safeOn(promotionShapeColorInput, "input", savePromotionImageSignature);
+  safeOn(generatePromotionCaseButton, "click", generatePromotionCaseText);
+  safeOn(savePromotionCaseButton, "click", savePromotionCase);
+  safeOn(copyPromotionCaseButton, "click", () => copyPromotionCase());
+  safeOn(savePromotionIdeaButton, "click", savePromotionIdea);
+  safeOn(extractPromotionBlogButton, "click", extractPromotionBlogText);
+  safeOn(extractPromotionImageTextButton, "click", extractPromotionImageText);
+  safeOn(promotionIdeaImageInput, "change", extractPromotionImageText);
+  safeOn(promotionEmojiBank, "click", (event) => {
+    const button = event.target.closest("[data-promotion-emoji]");
+    if (button) togglePromotionEmoji(button.dataset.promotionEmoji);
+  });
+  safeOn(copyPromotionEmojiButton, "click", copySelectedPromotionEmojiImage);
+  safeOn(promotionIdeaList, "click", (event) => {
+    const load = event.target.closest("[data-promotion-idea-load-id]");
+    const del = event.target.closest("[data-promotion-idea-delete-id]");
+    if (load) loadPromotionIdea(load.dataset.promotionIdeaLoadId);
+    if (del) deletePromotionIdea(del.dataset.promotionIdeaDeleteId);
+  });
+  safeOn(promotionSavedImageList, "click", (event) => {
+    const load = event.target.closest("[data-promotion-image-load-id]");
+    const download = event.target.closest("[data-promotion-image-download-id]");
+    const del = event.target.closest("[data-promotion-image-delete-id]");
+    if (load) loadSavedPromotionImage(load.dataset.promotionImageLoadId);
+    if (download) downloadSavedPromotionImage(download.dataset.promotionImageDownloadId);
+    if (del) deleteSavedPromotionImage(del.dataset.promotionImageDeleteId);
+  });
+  safeOn(promotionCaseList, "click", (event) => {
+    const load = event.target.closest("[data-promotion-case-load-id]");
+    const copy = event.target.closest("[data-promotion-case-copy-id]");
+    const del = event.target.closest("[data-promotion-case-delete-id]");
+    if (load) loadPromotionCase(load.dataset.promotionCaseLoadId);
+    if (copy) copyPromotionCase(copy.dataset.promotionCaseCopyId);
+    if (del) deletePromotionCase(del.dataset.promotionCaseDeleteId);
+  });
   safeOn(promotionNaverSearchButton, "click", () => openPromotionSearch("naver"));
   safeOn(promotionPinterestSearchButton, "click", () => openPromotionSearch("pinterest"));
+  safeOn(promotionGoogleSearchButton, "click", () => openPromotionSearch("google"));
+  safeOn(promotionScreenshotPasteZone, "paste", handlePromotionScreenshotPaste);
+  safeOn(document, "paste", (event) => {
+    if (!document.body.classList.contains("promotion-mode")) return;
+    handlePromotionScreenshotPaste(event);
+  });
   safeOn(promotionSavedList, "click", (event) => {
     const deleteButton = event.target.closest("[data-promotion-delete-id]");
     if (deleteButton) {
