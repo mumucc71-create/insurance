@@ -972,6 +972,10 @@ function loadPhoneConsultationById(id) {
     return;
   }
   if (memo.source === "common-template") {
+    if (phoneConsultationCommonTemplateInput) {
+      phoneConsultationCommonTemplateInput.value = memo.content || "";
+    }
+    setStoredPhoneConsultationCommonTemplate(memo.content || "");
     appendPhoneConsultationMemoContent(memo.content, `"${memo.title || "공통 양식"}" 내용을 아래에 추가했습니다.`);
     renderPhoneConsultationMemoButtons(activePhoneConsultationId);
     return;
