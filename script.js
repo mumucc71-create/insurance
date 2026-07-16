@@ -14,9 +14,17 @@ const pageTitle = document.querySelector("#page-title");
 const previewTitle = document.querySelector("#preview-title");
 const openContractManagementButton = document.querySelector("#openContractManagementButton");
 const openDesignManagerButton = document.querySelector("#openDesignManagerButton");
-const showAccountInfoButton = document.querySelector("#showAccountInfoButton");
-const copyCustomerManagementButton = document.querySelector("#copyCustomerManagementButton");
-const printCustomerManagementButton = document.querySelector("#printCustomerManagementButton");
+const phoneConsultationButton = document.querySelector("#phoneConsultationButton");
+const phoneConsultationMemoList = document.querySelector("#phoneConsultationMemoList");
+const phoneConsultationTitleInput = document.querySelector("#phoneConsultationTitleInput");
+const phoneConsultationMemoInput = document.querySelector("#phoneConsultationMemoInput");
+const phoneConsultationStatus = document.querySelector("#phoneConsultationStatus");
+const savePhoneConsultationButton = document.querySelector("#savePhoneConsultationButton");
+const newPhoneConsultationButton = document.querySelector("#newPhoneConsultationButton");
+const deletePhoneConsultationButton = document.querySelector("#deletePhoneConsultationButton");
+const phoneConsultationCommonTemplateInput = document.querySelector("#phoneConsultationCommonTemplateInput");
+const savePhoneConsultationCommonTemplateButton = document.querySelector("#savePhoneConsultationCommonTemplateButton");
+const insertPhoneConsultationCommonTemplateButton = document.querySelector("#insertPhoneConsultationCommonTemplateButton");
 const backToMainButton = document.querySelector("#backToMainButton");
 const output = document.querySelector("#customerCopyText") || document.querySelector("#output");
 const universeFileUploadButton = document.querySelector("#universeFileUploadButton");
@@ -113,7 +121,10 @@ const localAccountStorageKey = "insuranceDisclosureLocalAccounts";
 const cloudSessionStorageKey = "insuranceDisclosureCloudSession";
 const localSessionStorageKey = "insuranceDisclosureLocalSession";
 const designManagerStorageKey = "insuranceDesignManagers";
+const phoneConsultationStorageKey = "insurancePhoneConsultationMemos";
+const phoneConsultationCommonTemplateStorageKey = "insurancePhoneConsultationCommonTemplate";
 const deletedCustomersStorageKey = "insuranceDisclosureDeletedCustomers";
+let activePhoneConsultationId = "";
 let autoSaveTimer = null;
 let cloudSyncTimer = null;
 let supabaseClient = null;
@@ -126,6 +137,27 @@ let authSettings = null;
 let selectedDesignManagerRow = null;
 let universeDisclosureText = "";
 let medicalAnalysisJson = null;
+
+function safeOn(element, type, handler, options) {
+  if (!element) {
+    console.warn(`[app] skipped ${type} listener: element missing`);
+    return;
+  }
+  element.addEventListener(type, handler, options);
+}
+
+function getSessionAuthName(session = currentSession) {
+  const user = session?.user ?? {};
+  const metadata = user.user_metadata ?? user.raw_user_meta_data ?? {};
+  return String(user.name || metadata.name || "").trim();
+}
+
+function getSessionAuthPhone(session = currentSession) {
+  const user = session?.user ?? {};
+  const metadata = user.user_metadata ?? user.raw_user_meta_data ?? {};
+  const emailPhone = String(user.email ?? "").match(/^(\d+)@phone\.insure\.local$/)?.[1] ?? "";
+  return normalizeAuthPhone(user.phone || metadata.phone || emailPhone || authPhone.value);
+}
 
 function getCheckedValues(selector) {
   return [...document.querySelectorAll(selector)]
@@ -275,31 +307,52 @@ function readSavedLocalSession() {
 }
 
 function fillAuthFieldsFromSession(session) {
-  const user = session?.user ?? {};
-  if (user.name) authName.value = user.name;
-  if (user.phone) authPhone.value = formatPhoneNumber(user.phone);
+  const name = getSessionAuthName(session);
+  const phone = getSessionAuthPhone(session);
+  if (name) authName.value = name;
+  if (phone) authPhone.value = formatPhoneNumber(phone);
 }
 
 function isLocalAuthSession(session) {
   return session?.mode === "local" || (!session?.access_token && !!session?.user?.id);
 }
 
-async function restoreLocalAuthSession(session) {
+function resolveLocalAccountFromSession(session) {
   const accounts = readJsonStorage(localAccountStorageKey, []);
-  const account = accounts.find((item) => item.id === session.user.id)
-    || accounts.find((item) => item.phone === session.user.phone && normalizeAuthName(item.name) === normalizeAuthName(session.user.name));
+  const phone = getSessionAuthPhone(session);
+  const matched = accounts.find((item) => item.id === session.user.id)
+    || (phone ? accounts.find((item) => item.phone === phone) : null);
 
-  if (!account) {
-    saveLocalSession(null);
-    return false;
-  }
+  if (matched) return matched;
+
+  const name = getSessionAuthName(session);
+  if (!name || phone.length < 10) return null;
+
+  const recoveredAccount = {
+    id: session.user.id || `local-${phone}`,
+    name,
+    phone,
+    createdAt: new Date().toISOString(),
+  };
+  accounts.push(recoveredAccount);
+  localStorage.setItem(localAccountStorageKey, JSON.stringify(accounts));
+  return recoveredAccount;
+}
+
+async function restoreLocalAuthSession(session) {
+  const account = resolveLocalAccountFromSession(session);
+  if (!account) return false;
 
   localMode = true;
   currentSession = buildLocalSession(account);
   activeUserId = account.id;
   hasCloudHydrated = true;
   saveLocalSession(currentSession);
-  migrateLegacyDataToCurrentAccount();
+  try {
+    migrateLegacyDataToCurrentAccount();
+  } catch (error) {
+    console.warn("[auth] legacy data migration skipped", error);
+  }
   fillAuthFieldsFromSession(currentSession);
   showCustomerApp();
   restoreUiFromCurrentStorage();
@@ -334,9 +387,15 @@ async function restoreSavedAuthSession() {
     if (restored) return true;
   }
 
+  if (isSupabaseConfigured()) {
+    saveLocalSession(null);
+    return false;
+  }
+
   const savedLocalSession = readSavedLocalSession();
   if (savedLocalSession) {
-    return restoreLocalAuthSession(savedLocalSession);
+    const restored = await restoreLocalAuthSession(savedLocalSession);
+    if (restored) return true;
   }
 
   return false;
@@ -407,6 +466,25 @@ function getStoredCustomers() {
 function setStoredCustomers(customers) {
   localStorage.setItem(getScopedStorageKey(customerStorageKey), JSON.stringify(customers));
   scheduleCloudSync();
+}
+
+async function flushCloudSyncNow(reason = "수동 저장") {
+  window.clearTimeout(cloudSyncTimer);
+
+  if (localMode || isLocalAuthSession(currentSession)) {
+    setSyncStatus("이 기기 저장 - 브라우저 간 공유 안 됨", { reason });
+    showManagerStatus("현재는 이 기기 저장 모드입니다. 다른 브라우저에서도 보려면 클라우드 로그인/회원가입이 필요합니다.");
+    return false;
+  }
+
+  if (!supabaseClient || !currentSession?.access_token) {
+    setSyncStatus("클라우드 로그인 필요", { reason });
+    showManagerStatus("클라우드 로그인 후 저장해야 다른 브라우저에서도 고객정보가 유지됩니다.");
+    return false;
+  }
+
+  await pushCloudSnapshot();
+  return true;
 }
 
 function showManagerStatus(message) {
@@ -510,8 +588,8 @@ function renderConfigStatus() {
   if (configStatus) {
     configStatus.textContent = getSupabaseConfigStatusText();
   }
-  if (signupButton && authSettings) {
-    signupButton.disabled = authSettings.mailer_autoconfirm === false || authSettings.external?.email === false;
+  if (signupButton) {
+    signupButton.disabled = false;
   }
 }
 
@@ -524,8 +602,9 @@ function ensureSupabaseReadyForAuth() {
   const message = getSupabaseConfigError();
   if (!message) return true;
   supabaseClient = null;
-  authStatus.textContent = message;
-  showAuthScreen(message);
+  if (authScreen && !authScreen.hidden) {
+    if (authStatus) authStatus.textContent = message;
+  }
   return false;
 }
 
@@ -679,6 +758,307 @@ function showCurrentAccountInfo() {
   alert(`내 로그인 정보\n\n이름: ${info.name}\n연락처: ${info.phoneText}\n저장 방식: ${info.mode}\n사용자 ID: ${info.userId}${createdLine}${localWarning}`);
 }
 
+function getMainPageTitle() {
+  if (document.body.classList.contains("phone-consultation-mode")) return "전화상담";
+  if (document.body.classList.contains("contract-management-mode")) return "계약 및 보험사 비교 관리";
+  if (document.body.classList.contains("design-manager-mode")) return "보험사";
+  return "보험 고객 관리용 입력 시스템";
+}
+
+function showPhoneConsultationStatus(message) {
+  if (!phoneConsultationStatus) return;
+  phoneConsultationStatus.textContent = message;
+  window.setTimeout(() => {
+    phoneConsultationStatus.textContent = "";
+  }, 2200);
+}
+
+function getStoredPhoneConsultationMemos() {
+  const memos = readJsonStorage(getScopedStorageKey(phoneConsultationStorageKey), []);
+  return Array.isArray(memos) ? memos : [];
+}
+
+function recoverPhoneConsultationMemosToCurrentAccount() {
+  if (!currentSession?.user?.id) return getStoredPhoneConsultationMemos();
+
+  const scopedKey = getScopedStorageKey(phoneConsultationStorageKey);
+  const memoLists = [];
+  const addMemos = (key) => {
+    const memos = readJsonStorage(key, []);
+    if (Array.isArray(memos) && memos.length) memoLists.push(memos);
+  };
+
+  addMemos(scopedKey);
+  addMemos(phoneConsultationStorageKey);
+  listStorageKeysWithPrefix(phoneConsultationStorageKey).forEach((key) => {
+    if (key !== scopedKey) addMemos(key);
+  });
+
+  const phoneLocalId = getPhoneScopedLocalUserId();
+  if (phoneLocalId) addMemos(`${phoneConsultationStorageKey}:${phoneLocalId}`);
+
+  const merged = new Map();
+  memoLists.flat().forEach((memo) => {
+    if (!memo?.id) return;
+    const previous = merged.get(memo.id);
+    const memoTime = new Date(memo.updatedAt || memo.createdAt || 0).getTime();
+    const previousTime = new Date(previous?.updatedAt || previous?.createdAt || 0).getTime();
+    if (!previous || memoTime >= previousTime) merged.set(memo.id, memo);
+  });
+
+  const result = sortPhoneConsultationMemos([...merged.values()]);
+  if (result.length) {
+    localStorage.setItem(scopedKey, JSON.stringify(result));
+  }
+  return result.length ? result : getStoredPhoneConsultationMemos();
+}
+
+function setStoredPhoneConsultationMemos(memos) {
+  try {
+    localStorage.setItem(getScopedStorageKey(phoneConsultationStorageKey), JSON.stringify(memos));
+    return true;
+  } catch (error) {
+    console.error("[phone-memo] save failed", error);
+    return false;
+  }
+}
+
+function getStoredPhoneConsultationCommonTemplate() {
+  return String(readJsonStorage(getScopedStorageKey(phoneConsultationCommonTemplateStorageKey), "") ?? "");
+}
+
+function setStoredPhoneConsultationCommonTemplate(content) {
+  localStorage.setItem(getScopedStorageKey(phoneConsultationCommonTemplateStorageKey), JSON.stringify(String(content ?? "")));
+}
+
+function renderPhoneConsultationCommonTemplate() {
+  if (phoneConsultationCommonTemplateInput) {
+    phoneConsultationCommonTemplateInput.value = getStoredPhoneConsultationCommonTemplate();
+  }
+}
+
+function getPhoneConsultationTemplateButtonTitle(content) {
+  return String(content ?? "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find(Boolean) || "";
+}
+
+function savePhoneConsultationCommonTemplateAsMemo(content) {
+  const title = getPhoneConsultationTemplateButtonTitle(content);
+  if (!title) return { saved: false, reason: "empty-title" };
+
+  const memos = recoverPhoneConsultationMemosToCurrentAccount();
+  const now = new Date().toISOString();
+  let memo = memos.find((item) => item.source === "common-template" && item.title === title);
+  if (!memo) {
+    memo = memos.find((item) => !item.source && item.title === title && item.content === content);
+  }
+
+  if (memo) {
+    memo.title = title;
+    memo.content = content;
+    memo.source = "common-template";
+    memo.updatedAt = now;
+  } else {
+    memos.push({
+      id: `phone-template-${Date.now()}`,
+      title,
+      content,
+      source: "common-template",
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
+
+  return { saved: setStoredPhoneConsultationMemos(memos), title };
+}
+
+function savePhoneConsultationCommonTemplate() {
+  const content = phoneConsultationCommonTemplateInput?.value ?? "";
+  setStoredPhoneConsultationCommonTemplate(content);
+  const result = savePhoneConsultationCommonTemplateAsMemo(content);
+  renderPhoneConsultationMemoButtons();
+
+  if (result.saved) {
+    showPhoneConsultationStatus(`공통 양식을 저장하고 "${result.title}" 버튼을 만들었습니다.`);
+    return;
+  }
+
+  if (result.reason === "empty-title") {
+    showPhoneConsultationStatus("공통 양식을 저장했습니다. 첫 줄을 쓰면 저장된 메모 버튼도 만들어집니다.");
+    return;
+  }
+
+  showPhoneConsultationStatus("공통 양식은 저장했지만 메모 버튼 저장에 실패했습니다.");
+}
+
+function appendPhoneConsultationMemoContent(content, message = "내용을 메모칸 아래에 추가했습니다.") {
+  const template = String(content ?? "").trim();
+  if (!template || !phoneConsultationMemoInput) {
+    showPhoneConsultationStatus("추가할 내용이 없습니다.");
+    return;
+  }
+  const current = phoneConsultationMemoInput?.value ?? "";
+  phoneConsultationMemoInput.value = current.trim()
+    ? `${current.replace(/\s+$/, "")}\n\n${template}`
+    : template;
+  phoneConsultationMemoInput.focus();
+  phoneConsultationMemoInput.selectionStart = phoneConsultationMemoInput.value.length;
+  phoneConsultationMemoInput.selectionEnd = phoneConsultationMemoInput.value.length;
+  showPhoneConsultationStatus(message);
+}
+
+function insertPhoneConsultationCommonTemplate() {
+  const template = getStoredPhoneConsultationCommonTemplate().trim();
+  if (!template) {
+    showPhoneConsultationStatus("먼저 공통 메모 양식을 작성하고 저장해주세요.");
+    return;
+  }
+  appendPhoneConsultationMemoContent(template, "공통 메모 양식을 메모칸 아래에 추가했습니다.");
+}
+
+function formatPhoneConsultationSavedAt(value) {
+  const date = new Date(value || "");
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleString("ko-KR", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function sortPhoneConsultationMemos(memos) {
+  return [...memos].sort((left, right) => new Date(right.updatedAt || right.createdAt || 0) - new Date(left.updatedAt || left.createdAt || 0));
+}
+
+function renderPhoneConsultationMemoButtons(selectedId = activePhoneConsultationId) {
+  if (!phoneConsultationMemoList) return;
+  const memos = sortPhoneConsultationMemos(recoverPhoneConsultationMemosToCurrentAccount());
+  phoneConsultationMemoList.innerHTML = "";
+
+  if (!memos.length) {
+    const empty = document.createElement("p");
+    empty.className = "phone-consultation-memo-empty";
+    empty.textContent = "저장된 메모가 없습니다. 제목을 입력하고 저장해주세요.";
+    phoneConsultationMemoList.append(empty);
+    return;
+  }
+
+  memos.forEach((memo) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "phone-consultation-memo-button";
+    if (memo.id === selectedId) button.classList.add("is-selected");
+    button.dataset.memoId = memo.id;
+    button.textContent = memo.title || "제목 없음";
+    phoneConsultationMemoList.append(button);
+  });
+}
+
+function clearPhoneConsultationForm() {
+  activePhoneConsultationId = "";
+  if (phoneConsultationTitleInput) phoneConsultationTitleInput.value = "";
+  if (phoneConsultationMemoInput) phoneConsultationMemoInput.value = "";
+  renderPhoneConsultationMemoButtons();
+}
+
+function loadPhoneConsultationById(id) {
+  const memo = recoverPhoneConsultationMemosToCurrentAccount().find((item) => item.id === id);
+  if (!memo) {
+    showPhoneConsultationStatus("저장된 메모를 찾지 못했습니다.");
+    return;
+  }
+  if (memo.source === "common-template") {
+    appendPhoneConsultationMemoContent(memo.content, `"${memo.title || "공통 양식"}" 내용을 아래에 추가했습니다.`);
+    renderPhoneConsultationMemoButtons(activePhoneConsultationId);
+    return;
+  }
+  activePhoneConsultationId = memo.id;
+  if (phoneConsultationTitleInput) phoneConsultationTitleInput.value = memo.title || "";
+  if (phoneConsultationMemoInput) phoneConsultationMemoInput.value = memo.content || "";
+  renderPhoneConsultationMemoButtons(memo.id);
+  showPhoneConsultationStatus("메모를 불러왔습니다.");
+}
+
+function savePhoneConsultationMemo() {
+  if (!currentSession?.user?.id) {
+    showPhoneConsultationStatus("로그인 후 저장할 수 있습니다.");
+    return;
+  }
+
+  const title = phoneConsultationTitleInput?.value.trim() ?? "";
+  const content = phoneConsultationMemoInput?.value ?? "";
+  if (!title) {
+    showPhoneConsultationStatus("제목을 입력해주세요.");
+    phoneConsultationTitleInput?.focus();
+    return;
+  }
+
+  const memos = recoverPhoneConsultationMemosToCurrentAccount();
+  const now = new Date().toISOString();
+  const existing = memos.find((memo) => memo.id === activePhoneConsultationId);
+  if (existing) {
+    existing.title = title;
+    existing.content = content;
+    existing.updatedAt = now;
+  } else {
+    activePhoneConsultationId = `phone-memo-${Date.now()}`;
+    memos.push({
+      id: activePhoneConsultationId,
+      title,
+      content,
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
+
+  if (!setStoredPhoneConsultationMemos(memos)) {
+    showPhoneConsultationStatus("메모 저장에 실패했습니다.");
+    return;
+  }
+
+  renderPhoneConsultationMemoButtons(activePhoneConsultationId);
+  showPhoneConsultationStatus("전화상담 메모를 저장했습니다.");
+}
+
+function deletePhoneConsultationMemo() {
+  if (!activePhoneConsultationId) {
+    showPhoneConsultationStatus("삭제할 메모 버튼을 먼저 선택해주세요.");
+    return;
+  }
+
+  const memos = getStoredPhoneConsultationMemos().filter((memo) => memo.id !== activePhoneConsultationId);
+  if (!setStoredPhoneConsultationMemos(memos)) {
+    showPhoneConsultationStatus("메모 삭제에 실패했습니다.");
+    return;
+  }
+
+  clearPhoneConsultationForm();
+  showPhoneConsultationStatus("메모를 삭제했습니다.");
+}
+
+function openPhoneConsultation() {
+  setPhoneConsultationMode(true);
+}
+
+function setPhoneConsultationMode(enabled, updateHash = true) {
+  document.body.classList.toggle("phone-consultation-mode", enabled);
+  if (enabled) {
+    document.body.classList.remove("contract-management-mode", "design-manager-mode");
+    renderPhoneConsultationMemoButtons(activePhoneConsultationId);
+    renderPhoneConsultationCommonTemplate();
+  }
+  if (pageTitle) pageTitle.textContent = getMainPageTitle();
+  if (updateHash) {
+    const nextUrl = enabled ? "#phone-consultation" : window.location.pathname + window.location.search;
+    window.history.replaceState(null, "", nextUrl);
+  }
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
 function getPhoneAuthEmail() {
   const phone = normalizeAuthPhone(authPhone.value);
   return phone.length >= 10 ? `${phone}@phone.insure.local` : "";
@@ -789,8 +1169,12 @@ function listStorageKeysWithPrefix(prefix) {
   return keys;
 }
 
+function getSessionPhoneNumber() {
+  return getSessionAuthPhone();
+}
+
 function getPhoneScopedLocalUserId(phoneValue = "") {
-  const phone = normalizeAuthPhone(phoneValue || currentSession?.user?.phone || authPhone.value);
+  const phone = normalizeAuthPhone(phoneValue) || getSessionPhoneNumber();
   return phone.length >= 10 ? `local-${phone}` : "";
 }
 
@@ -913,7 +1297,8 @@ async function loginLocalAccount() {
   const phone = normalizeAuthPhone(authPhone.value);
   const name = normalizeAuthName(authName.value);
   const accounts = readJsonStorage(localAccountStorageKey, []);
-  const account = accounts.find((item) => item.phone === phone && normalizeAuthName(item.name) === name);
+  const account = accounts.find((item) => item.phone === phone && normalizeAuthName(item.name) === name)
+    || accounts.find((item) => item.phone === phone);
 
   if (!account) {
     authStatus.textContent = "등록된 이름과 연락처를 찾지 못했습니다. 처음이면 회원가입을 눌러주세요.";
@@ -969,17 +1354,86 @@ async function signupLocalAccount() {
   return true;
 }
 
+function findMatchingLocalAccountForAuthInput() {
+  const phone = normalizeAuthPhone(authPhone.value);
+  const name = normalizeAuthName(authName.value);
+  const accounts = readJsonStorage(localAccountStorageKey, []);
+  if (!Array.isArray(accounts) || !phone) return null;
+  return accounts.find((item) => item.phone === phone && normalizeAuthName(item.name) === name)
+    || accounts.find((item) => item.phone === phone)
+    || null;
+}
+
+async function recoverLocalAccountThroughCloudSignup(localAccount, reason = "") {
+  if (!localAccount) return false;
+  if (!supabaseClient || !isSupabaseConfigured()) {
+    openLocalAccount(localAccount);
+    authStatus.textContent = "기존 이 기기 저장 사용자를 불러왔습니다. 서버 연결 후 클라우드 전환이 필요합니다.";
+    return true;
+  }
+
+  const phone = normalizeAuthPhone(localAccount.phone);
+  const name = localAccount.name || authName.value.trim();
+  if (!phone || !name) return false;
+
+  authStatus.textContent = "기존 이 기기 저장 사용자를 클라우드로 복구하는 중...";
+  try {
+    const { data, error } = await supabaseJson("/auth/v1/signup", {
+      method: "POST",
+      body: {
+        email: `${phone}@phone.insure.local`,
+        password: `Insure-${phone}-${encodeURIComponent(normalizeAuthName(name))}`,
+        data: { name, phone },
+      },
+    });
+
+    if (error) {
+      openLocalAccount(localAccount);
+      authStatus.textContent = `기존 이 기기 저장 사용자를 불러왔습니다. 클라우드 복구는 실패했습니다: ${error.message}`;
+      return true;
+    }
+
+    const session = normalizeSupabaseSession(data);
+    if (!session) {
+      openLocalAccount(localAccount);
+      authStatus.textContent = "기존 이 기기 저장 사용자를 불러왔습니다. 클라우드 가입 확인 설정 때문에 서버 전환은 보류되었습니다.";
+      return true;
+    }
+
+    localMode = false;
+    saveCloudSession(session);
+    saveLocalSession(null);
+    await handleAuthSession(session);
+    authStatus.textContent = reason
+      ? `${reason} 기존 이 기기 저장 고객정보를 클라우드 사용자로 복구했습니다.`
+      : "기존 이 기기 저장 고객정보를 클라우드 사용자로 복구했습니다.";
+    return true;
+  } catch (error) {
+    openLocalAccount(localAccount);
+    authStatus.textContent = `기존 이 기기 저장 사용자를 불러왔습니다. 클라우드 복구 요청은 실패했습니다: ${error.message}`;
+    return true;
+  }
+}
+
+function persistAuthSessionSnapshot() {
+  if (!currentSession?.user?.id) return;
+  if (localMode || isLocalAuthSession(currentSession)) {
+    saveLocalSession(currentSession);
+    return;
+  }
+  saveCloudSession(currentSession);
+}
+
 function showAuthScreen(message = "") {
-  authScreen.hidden = false;
-  appRoot.classList.add("is-auth-hidden");
-  authStatus.textContent = message;
+  window.InsuranceAuthKernel?.showLoginScreen?.(message);
+  if (authStatus && message) authStatus.textContent = message;
   renderAccountInfo();
   renderConfigStatus();
 }
 
 function showCustomerApp() {
-  authScreen.hidden = true;
-  appRoot.classList.remove("is-auth-hidden");
+  window.InsuranceAuthKernel?.showMainApp?.();
+  persistAuthSessionSnapshot();
   renderAccountInfo();
 }
 
@@ -1102,17 +1556,27 @@ function scheduleCloudSync() {
 }
 
 function restoreUiFromCurrentStorage() {
+  const recovery = recoverAllStoredDataToCurrentAccount({ quiet: true });
   customerSearchInput.value = "";
-  renderSavedCustomerList();
   renderDesignManagers();
 
   const restoredDraft = restoreAutoSavedDraft();
   if (!restoredDraft) {
     restoreCustomersToUi();
+  } else if (recovery.customers.length) {
+    const draft = readJsonStorage(getScopedStorageKey(autoSaveDraftKey));
+    const selectedId = draft?.selectedId && recovery.customers.some((customer) => customer.id === draft.selectedId)
+      ? draft.selectedId
+      : recovery.customers[0].id;
+    savedCustomerSelect.value = selectedId;
   }
 
   renderSavedCustomerList(savedCustomerSelect.value);
   renderOutput();
+
+  if (!localMode && hasCloudHydrated && recovery.recoveredCustomerCount > 0) {
+    scheduleCloudSync();
+  }
 }
 
 async function hydrateFromCloud() {
@@ -1203,6 +1667,10 @@ async function hydrateFromCloud() {
 
   isHydratingCloud = false;
   hasCloudHydrated = true;
+  const recovery = recoverAllStoredDataToCurrentAccount({ quiet: true });
+  if (recovery.recoveredCustomerCount > 0) {
+    shouldPushAfterHydrate = true;
+  }
   setSyncStatus("서버 데이터 불러오기 완료", {
     customers: getStoredCustomers().length,
   });
@@ -1243,31 +1711,73 @@ async function handleAuthSession(session) {
 }
 
 async function initializeAuthentication() {
-  if (await restoreSavedAuthSession()) {
-    return;
+  renderConfigStatus();
+
+  try {
+    if (await restoreSavedAuthSession()) {
+      return;
+    }
+  } catch (error) {
+    console.warn("[auth] restore skipped", error);
   }
+
+  showAuthScreen("이름과 연락처로 로그인하거나 회원가입해주세요.");
 
   if (hasSupabaseConfigValues() && !ensureSupabaseReadyForAuth()) {
     localMode = true;
-    showAuthScreen("클라우드 연결값이 불완전해 이 기기 저장 모드로 로그인합니다.");
     return;
   }
 
   if (!isSupabaseConfigured()) {
     localMode = true;
     setSyncStatus("서버 연결 필요");
-    showAuthScreen("이 기기 저장 모드입니다. 이름과 연락처로 로그인하거나 회원가입하세요.");
     return;
   }
 
+  localMode = false;
   supabaseClient = { mode: "rest" };
-  await getSupabaseAuthSettings();
-  showAuthScreen("이름과 내 연락처로 로그인해주세요.");
+  setSyncStatus("클라우드 로그인 대기");
+  void getSupabaseAuthSettings();
+}
+
+function registerInsuranceAuthKernel() {
+  const handlers = {
+    login: loginWithEmail,
+    signup: signupWithEmail,
+    onPageHide: () => {
+      if (appRoot?.classList.contains("is-auth-hidden")) return;
+      window.clearTimeout(autoSaveTimer);
+      runAutoSave();
+      persistAuthSessionSnapshot();
+      if (!localMode && currentSession?.access_token) {
+        void pushCloudSnapshot();
+      }
+    },
+    onAppReady: () => {
+      void initializeAuthentication();
+    },
+  };
+
+  if (window.InsuranceAuthKernel?.registerAppAuth) {
+    window.InsuranceAuthKernel.registerAppAuth(handlers);
+    document.addEventListener("insurance-auth-ready", (event) => {
+      const session = event.detail?.session;
+      if (!event.detail?.emergency || !session) return;
+      void restoreLocalAuthSession(session);
+    });
+    return;
+  }
+
+  console.warn("[auth] kernel missing; using legacy auth bootstrap");
+  safeOn(authForm, "submit", loginWithEmail);
+  safeOn(signupButton, "click", signupWithEmail);
+  void initializeAuthentication();
+  safeOn(window, "pagehide", handlers.onPageHide);
 }
 
 async function loginWithEmail(event) {
   event.preventDefault();
-  if (localMode || !isSupabaseConfigured()) {
+  if (!isSupabaseConfigured()) {
     await loginOrCreateLocalAccount();
     return;
   }
@@ -1304,6 +1814,14 @@ async function loginWithEmail(event) {
       },
     });
     if (error) {
+      if (isInvalidCloudLoginError(error.message)) {
+        const localAccount = findMatchingLocalAccountForAuthInput();
+        if (localAccount) {
+          const recovered = await recoverLocalAccountThroughCloudSignup(localAccount, `클라우드 기존 사용자를 찾지 못했습니다: ${error.message}`);
+          if (recovered) return;
+        }
+      }
+
       if (shouldFallbackToLocalAuth(error.message)) {
         const localLoggedIn = await loginOrCreateLocalAccount(`클라우드 연결 실패: ${error.message}`);
         if (!localLoggedIn) {
@@ -1338,7 +1856,7 @@ async function loginWithEmail(event) {
 }
 
 async function signupWithEmail() {
-  if (localMode || !isSupabaseConfigured()) {
+  if (!isSupabaseConfigured()) {
     await signupLocalAccount();
     return;
   }
@@ -1361,6 +1879,7 @@ async function signupWithEmail() {
     return;
   }
 
+  const existingLocalAccount = findMatchingLocalAccountForAuthInput();
   authStatus.textContent = "회원가입 중...";
   try {
     const settings = await getSupabaseAuthSettings();
@@ -1384,6 +1903,11 @@ async function signupWithEmail() {
     });
 
     if (error) {
+      if (existingLocalAccount) {
+        const recovered = await recoverLocalAccountThroughCloudSignup(existingLocalAccount, `기존 이 기기 저장 사용자를 찾았습니다.`);
+        if (recovered) return;
+      }
+
       if (shouldFallbackToLocalAuth(error.message)) {
         const localSignedUp = await signupLocalAccount();
         if (!localSignedUp) {
@@ -1408,6 +1932,11 @@ async function signupWithEmail() {
       authStatus.textContent = "회원가입과 로그인이 완료되었습니다.";
     }
   } catch (error) {
+    if (existingLocalAccount) {
+      const recovered = await recoverLocalAccountThroughCloudSignup(existingLocalAccount, "기존 이 기기 저장 사용자를 찾았습니다.");
+      if (recovered) return;
+    }
+
     const localSignedUp = await signupLocalAccount();
     if (!localSignedUp) {
       authStatus.textContent = error.message.includes("non ISO-8859-1")
@@ -1441,13 +1970,9 @@ async function logoutCustomerApp() {
 function setContractManagementMode(enabled, updateHash = true) {
   document.body.classList.toggle("contract-management-mode", enabled);
   if (enabled) {
-    document.body.classList.remove("design-manager-mode");
+    document.body.classList.remove("design-manager-mode", "phone-consultation-mode");
   }
-  pageTitle.textContent = enabled
-    ? "계약 및 보험사 비교 관리"
-    : document.body.classList.contains("design-manager-mode")
-      ? "보험사"
-      : "보험 고객 관리용 입력 시스템";
+  if (pageTitle) pageTitle.textContent = getMainPageTitle();
 
   if (updateHash) {
     const nextUrl = enabled ? "#contracts" : window.location.pathname + window.location.search;
@@ -1460,14 +1985,10 @@ function setContractManagementMode(enabled, updateHash = true) {
 function setDesignManagerMode(enabled, updateHash = true) {
   document.body.classList.toggle("design-manager-mode", enabled);
   if (enabled) {
-    document.body.classList.remove("contract-management-mode");
+    document.body.classList.remove("contract-management-mode", "phone-consultation-mode");
     renderDesignManagers();
   }
-  pageTitle.textContent = enabled
-    ? "보험사"
-    : document.body.classList.contains("contract-management-mode")
-      ? "계약 및 보험사 비교 관리"
-      : "보험 고객 관리용 입력 시스템";
+  if (pageTitle) pageTitle.textContent = getMainPageTitle();
 
   if (updateHash) {
     const nextUrl = enabled ? "#insurers" : window.location.pathname + window.location.search;
@@ -1480,6 +2001,7 @@ function setDesignManagerMode(enabled, updateHash = true) {
 function goMainMode() {
   setContractManagementMode(false, false);
   setDesignManagerMode(false, false);
+  setPhoneConsultationMode(false, false);
   window.history.replaceState(null, "", window.location.pathname + window.location.search);
 }
 
@@ -4705,6 +5227,11 @@ function runAutoSave() {
   showManagerStatus("자동 저장됨");
 }
 
+async function saveCurrentCustomerAndSync() {
+  saveCurrentCustomer();
+  await flushCloudSyncNow("현재 고객 저장");
+}
+
 function scheduleAutoSave() {
   window.clearTimeout(autoSaveTimer);
   autoSaveTimer = window.setTimeout(runAutoSave, 700);
@@ -5080,225 +5607,239 @@ function handleFormChange(event) {
   renderOutput();
 }
 
-noticeList.addEventListener("click", (event) => {
-  if (!event.target.matches("[data-remove-notice]")) return;
-  event.target.closest(".notice-card").remove();
-  refreshNoticeNumbers();
-  renderOutput();
-  scheduleAutoSave();
-});
-
-contractList.addEventListener("click", (event) => {
-  const card = event.target.closest(".contract-card");
-  if (!card) return;
-
-  if (event.target.matches("[data-toggle-contract]")) {
-    setContractCollapsed(card, !card.classList.contains("is-collapsed"));
-    scheduleAutoSave();
-    return;
-  }
-
-  if (event.target.matches("[data-remove-contract]")) {
-    card.remove();
-    if (!contractList.querySelector(".contract-card")) {
-      addContract();
-    }
-    refreshContractNumbers();
+function bindApplicationUiEvents() {
+  safeOn(noticeList, "click", (event) => {
+    if (!event.target.matches("[data-remove-notice]")) return;
+    event.target.closest(".notice-card").remove();
+    refreshNoticeNumbers();
     renderOutput();
     scheduleAutoSave();
-  }
-});
+  });
 
-medicationList.addEventListener("click", (event) => {
-  if (!event.target.matches("[data-remove-medication]")) return;
-  event.target.closest(".medication-row").remove();
-  if (!medicationList.querySelector(".medication-row")) {
-    addMedicationRow({}, { primary: true });
-  }
-  renderOutput();
-  scheduleAutoSave();
-});
+  safeOn(contractList, "click", (event) => {
+    const card = event.target.closest(".contract-card");
+    if (!card) return;
 
-fiveYearList.addEventListener("click", (event) => {
-  if (!event.target.matches("[data-remove-five-year]")) return;
-  event.target.closest(".notice-card").remove();
-  refreshFiveYearNumbers();
-  renderOutput();
-  scheduleAutoSave();
-});
+    if (event.target.matches("[data-toggle-contract]")) {
+      setContractCollapsed(card, !card.classList.contains("is-collapsed"));
+      scheduleAutoSave();
+      return;
+    }
 
-tenYearList.addEventListener("click", (event) => {
-  if (!event.target.matches("[data-remove-ten-year]")) return;
-  event.target.closest(".notice-card").remove();
-  refreshTenYearNumbers();
-  renderOutput();
-  scheduleAutoSave();
-});
+    if (event.target.matches("[data-remove-contract]")) {
+      card.remove();
+      if (!contractList.querySelector(".contract-card")) {
+        addContract();
+      }
+      refreshContractNumbers();
+      renderOutput();
+      scheduleAutoSave();
+    }
+  });
 
-designManagerList.addEventListener("click", (event) => {
-  const row = event.target.closest(".design-manager-row");
-  if (!row) return;
+  safeOn(medicationList, "click", (event) => {
+    if (!event.target.matches("[data-remove-medication]")) return;
+    event.target.closest(".medication-row").remove();
+    if (!medicationList.querySelector(".medication-row")) {
+      addMedicationRow({}, { primary: true });
+    }
+    renderOutput();
+    scheduleAutoSave();
+  });
 
-  selectDesignManagerRow(row);
+  safeOn(fiveYearList, "click", (event) => {
+    if (!event.target.matches("[data-remove-five-year]")) return;
+    event.target.closest(".notice-card").remove();
+    refreshFiveYearNumbers();
+    renderOutput();
+    scheduleAutoSave();
+  });
 
-  const copyButton = event.target.closest("[data-copy-insurer]");
-  if (copyButton) {
-    const copyType = copyButton.dataset.copyInsurer;
-    const copyMap = {
-      manager: { value: row.dataset.name ?? "", message: "담당자 복사 완료" },
-      managerPhone: { value: row.dataset.managerPhone ?? "", message: "담당자 연락처 복사 완료" },
-      admin: { value: row.dataset.admin ?? "", message: "총무 복사 완료" },
-      adminPhone: { value: row.dataset.adminPhone ?? "", message: "총무 연락처 복사 완료" },
-      loginId: { value: row.dataset.loginId ?? "", message: "아이디 복사 완료" },
-      password: { value: row.dataset.password ?? "", message: "비번 복사 완료" },
-    };
-    const copyItem = copyMap[copyType];
-    if (copyItem) copyInsurerValue(copyItem.value, copyItem.message);
-    return;
-  }
+  safeOn(tenYearList, "click", (event) => {
+    if (!event.target.matches("[data-remove-ten-year]")) return;
+    event.target.closest(".notice-card").remove();
+    refreshTenYearNumbers();
+    renderOutput();
+    scheduleAutoSave();
+  });
 
-  if (event.target.matches("[data-open-site]")) {
-    openInsuranceSite(row);
-    return;
-  }
+  safeOn(designManagerList, "click", (event) => {
+    const row = event.target.closest(".design-manager-row");
+    if (!row) return;
 
-  if (event.target.matches("[data-edit-design-manager]")) {
-    renderDesignManagerEdit(row);
-    return;
-  }
+    selectDesignManagerRow(row);
 
-  if (event.target.matches("[data-save-design-manager]")) {
-    saveDesignManagerEdit(row);
-    return;
-  }
+    const copyButton = event.target.closest("[data-copy-insurer]");
+    if (copyButton) {
+      const copyType = copyButton.dataset.copyInsurer;
+      const copyMap = {
+        manager: { value: row.dataset.name ?? "", message: "담당자 복사 완료" },
+        managerPhone: { value: row.dataset.managerPhone ?? "", message: "담당자 연락처 복사 완료" },
+        admin: { value: row.dataset.admin ?? "", message: "총무 복사 완료" },
+        adminPhone: { value: row.dataset.adminPhone ?? "", message: "총무 연락처 복사 완료" },
+        loginId: { value: row.dataset.loginId ?? "", message: "아이디 복사 완료" },
+        password: { value: row.dataset.password ?? "", message: "비번 복사 완료" },
+      };
+      const copyItem = copyMap[copyType];
+      if (copyItem) copyInsurerValue(copyItem.value, copyItem.message);
+      return;
+    }
 
-  if (event.target.matches("[data-cancel-design-manager]")) {
-    renderDesignManagerView(row);
-    return;
-  }
+    if (event.target.matches("[data-open-site]")) {
+      openInsuranceSite(row);
+      return;
+    }
 
-  if (event.target.matches("[data-remove-design-manager]")) {
-    clearSelectedDesignManagerRow(row);
-    row.remove();
-    saveDesignManagers();
-  }
-});
+    if (event.target.matches("[data-edit-design-manager]")) {
+      renderDesignManagerEdit(row);
+      return;
+    }
 
-designManagerList.addEventListener("keydown", (event) => {
-  if (event.key !== "Enter" && event.key !== " ") return;
-  const copyField = event.target.closest("[data-copy-insurer]");
-  const openSiteField = event.target.closest("[data-open-site]");
-  if (!copyField && !openSiteField) return;
-  (copyField || openSiteField).click();
-  event.preventDefault();
-});
+    if (event.target.matches("[data-save-design-manager]")) {
+      saveDesignManagerEdit(row);
+      return;
+    }
 
-addNoticeButton.addEventListener("click", () => {
-  addNotice();
-  scheduleAutoSave();
-});
-openContractManagementButton.addEventListener("click", () => setContractManagementMode(true));
-openDesignManagerButton.addEventListener("click", () => setDesignManagerMode(true));
-moveSelectedInsurerTop.addEventListener("click", () => moveSelectedDesignManagerRow("top"));
-moveSelectedInsurerUp.addEventListener("click", () => moveSelectedDesignManagerRow("up"));
-moveSelectedInsurerDown.addEventListener("click", () => moveSelectedDesignManagerRow("down"));
-moveSelectedInsurerBottom.addEventListener("click", () => moveSelectedDesignManagerRow("bottom"));
-universeFileUploadButton.addEventListener("click", () => universeFileInput.click());
-universeFileInput.addEventListener("change", (event) => {
-  const file = event.target.files?.[0];
-  handleUniverseFileUpload(file);
-  event.target.value = "";
-});
-copyCustomerManagementButton.addEventListener("click", () => {
-  copyText(buildOutput(), "고객정보 복사 완료");
-});
-printCustomerManagementButton.addEventListener("click", printCustomerRecord);
-backToMainButton.addEventListener("click", goMainMode);
-addContractButton.addEventListener("click", () => {
-  addContract();
-  scheduleAutoSave();
-});
-addComparisonButton.addEventListener("click", () => {
-  addComparisonRow();
-  scheduleAutoSave();
-});
-addMedicationButton.addEventListener("click", () => {
-  addMedicationRow();
-  scheduleAutoSave();
-});
-addDesignManagerButton.addEventListener("click", () => {
-  createInsurerCardFromForm();
-});
-addFiveYearButton.addEventListener("click", () => {
-  addFiveYearNotice();
-  scheduleAutoSave();
-});
-addTenYearButton.addEventListener("click", () => {
-  addTenYearNotice();
-  scheduleAutoSave();
-});
-authForm.addEventListener("submit", loginWithEmail);
-signupButton.addEventListener("click", signupWithEmail);
-showAccountInfoButton.addEventListener("click", showCurrentAccountInfo);
-logoutButton.addEventListener("click", logoutCustomerApp);
-document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "hidden" && !appRoot.classList.contains("is-auth-hidden")) {
-    window.clearTimeout(autoSaveTimer);
-    runAutoSave();
-    pushCloudSnapshot();
-  }
-});
-window.addEventListener("online", scheduleCloudSync);
-saveCustomerButton.addEventListener("click", saveCurrentCustomer);
-loadCustomerButton.addEventListener("click", loadSelectedCustomer);
-recoverCustomerButton.addEventListener("click", recoverStoredCustomersManually);
-newCustomerButton.addEventListener("click", startNewCustomer);
-deleteCustomerButton.addEventListener("click", deleteSelectedCustomer);
-customerSearchInput.addEventListener("input", () => renderSavedCustomerList(savedCustomerSelect.value));
-customerSearchResults.addEventListener("click", (event) => {
-  const button = event.target.closest("[data-customer-id]");
-  if (!button) return;
-  savedCustomerSelect.value = button.dataset.customerId;
-  loadCustomerById(button.dataset.customerId);
-});
-savedCustomerSelect.addEventListener("change", () => {
-  if (savedCustomerSelect.value) {
-    loadSelectedCustomer();
-  }
-});
-form.addEventListener("input", (event) => {
-  if (event.target.matches("[data-contract-field]")) {
-    refreshContractNumbers();
-  }
-  renderOutput();
-  scheduleAutoSave();
-});
-form.addEventListener("change", (event) => {
-  handleFormChange(event);
-  scheduleAutoSave();
-});
+    if (event.target.matches("[data-cancel-design-manager]")) {
+      renderDesignManagerView(row);
+      return;
+    }
 
-copyButton.addEventListener("click", () => {
-  if (!ensureValid()) return;
-  copyText(buildOutput(), "복사 완료");
-});
+    if (event.target.matches("[data-remove-design-manager]")) {
+      clearSelectedDesignManagerRow(row);
+      row.remove();
+      saveDesignManagers();
+    }
+  });
 
-kakaoCopyButton.addEventListener("click", () => {
-  if (!ensureValid()) return;
-  copyText(buildOutput().replace(/\n{3,}/g, "\n\n"), "카카오톡용 복사 완료");
-});
+  safeOn(designManagerList, "keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    const copyField = event.target.closest("[data-copy-insurer]");
+    const openSiteField = event.target.closest("[data-open-site]");
+    if (!copyField && !openSiteField) return;
+    (copyField || openSiteField).click();
+    event.preventDefault();
+  });
 
-insurerCopyButton.addEventListener("click", () => {
-  if (!ensureValid()) return;
-  copyText(buildOutput({ insurerMode: true }), "보험사 제출용 복사 완료");
-});
+  safeOn(addNoticeButton, "click", () => {
+    addNotice();
+    scheduleAutoSave();
+  });
+  safeOn(openContractManagementButton, "click", () => setContractManagementMode(true));
+  safeOn(openDesignManagerButton, "click", () => setDesignManagerMode(true));
+  safeOn(moveSelectedInsurerTop, "click", () => moveSelectedDesignManagerRow("top"));
+  safeOn(moveSelectedInsurerUp, "click", () => moveSelectedDesignManagerRow("up"));
+  safeOn(moveSelectedInsurerDown, "click", () => moveSelectedDesignManagerRow("down"));
+  safeOn(moveSelectedInsurerBottom, "click", () => moveSelectedDesignManagerRow("bottom"));
+  safeOn(universeFileUploadButton, "click", () => universeFileInput.click());
+  safeOn(universeFileInput, "change", (event) => {
+    const file = event.target.files?.[0];
+    handleUniverseFileUpload(file);
+    event.target.value = "";
+  });
+  safeOn(backToMainButton, "click", goMainMode);
+  safeOn(addContractButton, "click", () => {
+    addContract();
+    scheduleAutoSave();
+  });
+  safeOn(addComparisonButton, "click", () => {
+    addComparisonRow();
+    scheduleAutoSave();
+  });
+  safeOn(addMedicationButton, "click", () => {
+    addMedicationRow();
+    scheduleAutoSave();
+  });
+  safeOn(addDesignManagerButton, "click", () => {
+    createInsurerCardFromForm();
+  });
+  safeOn(addFiveYearButton, "click", () => {
+    addFiveYearNotice();
+    scheduleAutoSave();
+  });
+  safeOn(addTenYearButton, "click", () => {
+    addTenYearNotice();
+    scheduleAutoSave();
+  });
+  safeOn(phoneConsultationButton, "click", openPhoneConsultation);
+  safeOn(savePhoneConsultationButton, "click", savePhoneConsultationMemo);
+  safeOn(phoneConsultationMemoList, "click", (event) => {
+    const button = event.target.closest("[data-memo-id]");
+    if (!button) return;
+    loadPhoneConsultationById(button.dataset.memoId);
+  });
+  safeOn(newPhoneConsultationButton, "click", () => {
+    clearPhoneConsultationForm();
+    showPhoneConsultationStatus("새 메모를 작성할 수 있습니다.");
+    phoneConsultationTitleInput?.focus();
+  });
+  safeOn(deletePhoneConsultationButton, "click", deletePhoneConsultationMemo);
+  safeOn(savePhoneConsultationCommonTemplateButton, "click", savePhoneConsultationCommonTemplate);
+  safeOn(insertPhoneConsultationCommonTemplateButton, "click", insertPhoneConsultationCommonTemplate);
+  safeOn(logoutButton, "click", logoutCustomerApp);
+  safeOn(window, "online", scheduleCloudSync);
+  safeOn(saveCustomerButton, "click", () => {
+    void saveCurrentCustomerAndSync();
+  });
+  safeOn(loadCustomerButton, "click", loadSelectedCustomer);
+  safeOn(recoverCustomerButton, "click", recoverStoredCustomersManually);
+  safeOn(newCustomerButton, "click", startNewCustomer);
+  safeOn(deleteCustomerButton, "click", deleteSelectedCustomer);
+  safeOn(customerSearchInput, "input", () => renderSavedCustomerList(savedCustomerSelect.value));
+  safeOn(customerSearchResults, "click", (event) => {
+    const button = event.target.closest("[data-customer-id]");
+    if (!button) return;
+    savedCustomerSelect.value = button.dataset.customerId;
+    loadCustomerById(button.dataset.customerId);
+  });
+  safeOn(savedCustomerSelect, "change", () => {
+    if (savedCustomerSelect.value) {
+      loadSelectedCustomer();
+    }
+  });
+  safeOn(form, "input", (event) => {
+    if (event.target.matches("[data-contract-field]")) {
+      refreshContractNumbers();
+    }
+    renderOutput();
+    scheduleAutoSave();
+  });
+  safeOn(form, "change", (event) => {
+    handleFormChange(event);
+    scheduleAutoSave();
+  });
+  safeOn(copyButton, "click", () => {
+    if (!ensureValid()) return;
+    copyText(buildOutput(), "복사 완료");
+  });
+  safeOn(kakaoCopyButton, "click", () => {
+    if (!ensureValid()) return;
+    copyText(buildOutput().replace(/\n{3,}/g, "\n\n"), "카카오톡용 복사 완료");
+  });
+  safeOn(insurerCopyButton, "click", () => {
+    if (!ensureValid()) return;
+    copyText(buildOutput({ insurerMode: true }), "보험사 제출용 복사 완료");
+  });
+  safeOn(pdfButton, "click", () => {
+    if (!ensureValid()) return;
+    window.print();
+  });
+  safeOn(excelButton, "click", exportExcel);
+  setContractManagementMode(window.location.hash === "#contracts", false);
+  setDesignManagerMode(window.location.hash === "#insurers" || window.location.hash === "#design-manager", false);
+  setPhoneConsultationMode(window.location.hash === "#phone-consultation", false);
+}
 
-pdfButton.addEventListener("click", () => {
-  if (!ensureValid()) return;
-  window.print();
-});
+try {
+  registerInsuranceAuthKernel();
+} catch (error) {
+  console.error("[auth] kernel registration failed", error);
+  registerInsuranceAuthKernel();
+}
 
-excelButton.addEventListener("click", exportExcel);
-setContractManagementMode(window.location.hash === "#contracts", false);
-setDesignManagerMode(window.location.hash === "#insurers" || window.location.hash === "#design-manager", false);
-initializeAuthentication();
+try {
+  bindApplicationUiEvents();
+  window.__insuranceAppUiReady = true;
+} catch (error) {
+  console.error("[app] UI initialization failed; login/session restore still works.", error);
+}

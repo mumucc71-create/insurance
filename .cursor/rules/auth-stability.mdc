@@ -1,0 +1,30 @@
+---
+description: Prevent login/session regressions when editing the insure app
+globs: script.js,index.html,auth-boot.js
+alwaysApply: false
+---
+
+# Auth stability (insure app)
+
+## Architecture
+
+- `auth-boot.js` owns login UI, form submit, session fast-restore, and pagehide persistence hooks.
+- `script.js` registers auth handlers via `InsuranceAuthKernel.registerAppAuth()` — do not bind `#authForm` / `#signupButton` directly in `script.js`.
+- `index.html` order: `auth-boot.js` then `script.js` then `pdf.min.js` (defer). Never put `pdf.min.js` before `script.js`.
+
+## Forbidden changes
+
+- Do not move `registerInsuranceAuthKernel()` or `initializeAuthentication()` behind UI event binding.
+- Do not call `showAuthScreen()` from Supabase config checks while the user is already logged in.
+- Do not remove HTML buttons without removing or guarding their `addEventListener` in `script.js` (use `safeOn()`).
+- Do not add a second `authForm` submit listener.
+
+## Safe edit checklist
+
+1. After UI edits: run `node --check script.js`
+2. Bump `?v=` cache on `script.js`, `auth-boot.js`, or `styles.css` when shipping
+3. Test: login → F5 stays logged in → logout → login again
+
+## UI-only tasks
+
+When the request is buttons, memo, customers, PDF, etc., do not refactor auth functions unless login is explicitly broken.

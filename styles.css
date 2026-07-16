@@ -185,9 +185,8 @@ button:disabled:hover {
 
 body:not(.contract-management-mode) .contract-management-section,
 body:not(.design-manager-mode) .design-manager-section,
-body:not(.contract-management-mode) #copyCustomerManagementButton,
-body:not(.contract-management-mode) #printCustomerManagementButton,
-body:not(.contract-management-mode):not(.design-manager-mode) #backToMainButton {
+body:not(.phone-consultation-mode) .phone-consultation-section,
+body:not(.contract-management-mode):not(.design-manager-mode):not(.phone-consultation-mode) #backToMainButton {
   display: none;
 }
 
@@ -195,8 +194,12 @@ body.contract-management-mode #requestForm > .panel:not(.contract-management-sec
 body.contract-management-mode #openContractManagementButton,
 body.design-manager-mode #requestForm > .panel:not(.design-manager-section),
 body.design-manager-mode #openDesignManagerButton,
+body.phone-consultation-mode #requestForm > .panel:not(.phone-consultation-section),
+body.phone-consultation-mode #phoneConsultationButton,
 body.design-manager-mode .customer-manager,
-body.contract-management-mode .preview {
+body.phone-consultation-mode .customer-manager,
+body.contract-management-mode .preview,
+body.phone-consultation-mode .preview {
   display: none;
 }
 
@@ -205,9 +208,59 @@ body.design-manager-mode .preview {
 }
 
 body.contract-management-mode .app,
-body.design-manager-mode .app {
+body.design-manager-mode .app,
+body.phone-consultation-mode .app {
   grid-template-columns: minmax(0, 1fr);
   width: min(1280px, calc(100% - 32px));
+}
+
+.phone-consultation-common-template {
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(43, 92, 143, 0.12);
+}
+
+.phone-consultation-memo-field {
+  margin-bottom: 10px;
+}
+
+.phone-consultation-saved-memos {
+  margin-bottom: 16px;
+}
+
+.phone-consultation-saved-label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 700;
+}
+
+.phone-consultation-memo-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 42px;
+}
+
+.phone-consultation-memo-button {
+  min-height: 40px;
+  padding: 8px 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #ffffff;
+  color: var(--text);
+  font-weight: 700;
+}
+
+.phone-consultation-memo-button:hover,
+.phone-consultation-memo-button.is-selected {
+  border-color: var(--accent);
+  background: #f5fbf7;
+}
+
+.phone-consultation-memo-empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.92rem;
 }
 
 .eyebrow {
