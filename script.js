@@ -1316,6 +1316,9 @@ function renderPhoneConsultationMemoButtons(selectedId = activePhoneConsultation
     }
 
     group.memos.forEach((memo) => {
+      const item = document.createElement("span");
+      item.className = "phone-consultation-memo-item";
+
       const button = document.createElement("button");
       button.type = "button";
       button.className = "phone-consultation-memo-button";
@@ -1324,7 +1327,16 @@ function renderPhoneConsultationMemoButtons(selectedId = activePhoneConsultation
       button.draggable = true;
       button.title = "마우스로 끌어서 순서를 바꿀 수 있습니다.";
       button.textContent = memo.title || "제목 없음";
-      buttons.append(button);
+
+      const deleteButton = document.createElement("button");
+      deleteButton.type = "button";
+      deleteButton.className = "phone-consultation-memo-delete";
+      deleteButton.dataset.memoDeleteId = memo.id;
+      deleteButton.title = "저장된 메모 삭제";
+      deleteButton.textContent = "×";
+
+      item.append(button, deleteButton);
+      buttons.append(item);
     });
 
     column.append(buttons);
@@ -1440,21 +1452,40 @@ function savePhoneConsultationMemo() {
   showPhoneConsultationStatus("전화상담 메모를 저장했습니다.");
 }
 
-function deletePhoneConsultationMemo() {
-  if (!activePhoneConsultationId) {
+function deletePhoneConsultationMemoById(memoId) {
+  if (!memoId) {
     showPhoneConsultationStatus("삭제할 메모 버튼을 먼저 선택해주세요.");
     return;
   }
 
-  const memos = getStoredPhoneConsultationMemos().filter((memo) => memo.id !== activePhoneConsultationId);
+  const memo = recoverPhoneConsultationMemosToCurrentAccount().find((item) => item.id === memoId);
+  if (memo && !confirm(`"${memo.title || "제목 없음"}" 메모를 삭제할까요?`)) return;
+
+  const memos = getStoredPhoneConsultationMemos().filter((item) => item.id !== memoId);
   if (!setStoredPhoneConsultationMemos(memos)) {
     showPhoneConsultationStatus("메모 삭제에 실패했습니다.");
     return;
   }
 
-  clearPhoneConsultationForm();
+  const orders = getStoredPhoneConsultationOrders();
+  Object.values(orders).forEach((record) => {
+    if (!record || typeof record !== "object") return;
+    if (Array.isArray(record.ids)) record.ids = record.ids.filter((id) => id !== memoId);
+    if (record.groups && typeof record.groups === "object") delete record.groups[memoId];
+  });
+  setStoredPhoneConsultationOrders(orders);
+
+  if (activePhoneConsultationId === memoId) {
+    clearPhoneConsultationForm();
+  } else {
+    renderPhoneConsultationMemoButtons(activePhoneConsultationId);
+  }
   scheduleCloudSync();
-  showPhoneConsultationStatus("메모를 삭제했습니다.");
+  showPhoneConsultationStatus("저장된 메모를 삭제했습니다.");
+}
+
+function deletePhoneConsultationMemo() {
+  deletePhoneConsultationMemoById(activePhoneConsultationId);
 }
 
 function showPromotionStatus(message) {
@@ -6453,6 +6484,14 @@ function bindApplicationUiEvents() {
   safeOn(promotionButton, "click", openPromotion);
   safeOn(savePhoneConsultationButton, "click", savePhoneConsultationMemo);
   safeOn(phoneConsultationMemoList, "click", (event) => {
+    const deleteButton = event.target.closest("[data-memo-delete-id]");
+    if (deleteButton) {
+      event.preventDefault();
+      event.stopPropagation();
+      deletePhoneConsultationMemoById(deleteButton.dataset.memoDeleteId);
+      return;
+    }
+
     if (phoneConsultationMemoDragMoved) {
       phoneConsultationMemoDragMoved = false;
       return;
