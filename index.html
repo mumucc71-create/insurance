@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>보험 고객 관리용 입력 시스템</title>
-    <link rel="stylesheet" href="./styles.css?v=20260716-promotion-nav" />
+    <link rel="stylesheet" href="./styles.css?v=20260716-customer-memo-layout" />
   </head>
   <body>
     <section id="authScreen" class="auth-screen">
@@ -52,29 +52,34 @@
         </div>
 
         <section class="panel customer-manager" aria-labelledby="customer-manager-title">
-          <h2 id="customer-manager-title">고객관리 저장</h2>
-          <div class="manager-grid">
-            <label>
-              <span>저장된 고객</span>
-              <select id="savedCustomerSelect">
-                <option value="">저장된 고객 선택</option>
-              </select>
-            </label>
-            <label>
-              <span>통합 검색</span>
-              <input id="customerSearchInput" type="text" placeholder="이름, 보험사, 상품, 보험종류, 메모" autocomplete="off" />
-            </label>
-            <div class="manager-actions">
-              <button id="saveCustomerButton" type="button">현재 고객 저장</button>
-              <button id="loadCustomerButton" class="secondary-button" type="button">불러오기</button>
-              <button id="recoverCustomerButton" class="secondary-button" type="button">저장 데이터 복구</button>
-              <button id="dedupeCustomerButton" class="secondary-button" type="button">중복 정리</button>
-              <button id="newCustomerButton" class="secondary-button" type="button">새 고객</button>
-              <button id="deleteCustomerButton" class="danger-button" type="button">삭제</button>
-            </div>
+          <div class="customer-manager-head">
+            <h2 id="customer-manager-title">고객관리 저장</h2>
+            <button id="toggleCustomerManagerButton" class="secondary-button customer-manager-toggle" type="button" aria-expanded="true">접기</button>
           </div>
-          <div id="customerSearchResults" class="customer-search-results" aria-live="polite"></div>
-          <p id="managerStatus" class="manager-status" role="status" aria-live="polite"></p>
+          <div id="customerManagerBody" class="customer-manager-body">
+            <div class="manager-grid">
+              <label>
+                <span>저장된 고객</span>
+                <select id="savedCustomerSelect">
+                  <option value="">저장된 고객 선택</option>
+                </select>
+              </label>
+              <label>
+                <span>통합 검색</span>
+                <input id="customerSearchInput" type="text" placeholder="이름, 보험사, 상품, 보험종류, 메모" autocomplete="off" />
+              </label>
+              <div class="manager-actions">
+                <button id="saveCustomerButton" type="button">현재 고객 저장</button>
+                <button id="loadCustomerButton" class="secondary-button" type="button">불러오기</button>
+                <button id="recoverCustomerButton" class="secondary-button" type="button">저장 데이터 복구</button>
+                <button id="dedupeCustomerButton" class="secondary-button" type="button">중복 정리</button>
+                <button id="newCustomerButton" class="secondary-button" type="button">새 고객</button>
+                <button id="deleteCustomerButton" class="danger-button" type="button">삭제</button>
+              </div>
+            </div>
+            <div id="customerSearchResults" class="customer-search-results" aria-live="polite"></div>
+            <p id="managerStatus" class="manager-status" role="status" aria-live="polite"></p>
+          </div>
         </section>
 
         <form id="requestForm" class="form">
@@ -239,7 +244,7 @@
             </label>
             <label class="phone-consultation-memo-field">
               <span>메모</span>
-              <textarea id="phoneConsultationMemoInput" rows="14" placeholder="전화상담 내용을 입력하세요"></textarea>
+              <textarea id="phoneConsultationMemoInput" rows="28" placeholder="전화상담 내용을 입력하세요"></textarea>
             </label>
             <div class="manager-actions">
               <button id="insertPhoneConsultationCommonTemplateButton" class="secondary-button" type="button">공통 양식 넣기</button>
@@ -700,7 +705,7 @@
     <script src="./supabase-config.js?v=20260625-insurer-type-colors"></script>
     <script src="./disease-code-db.js?v=20260713-universe-disclosure"></script>
     <script src="./auth-boot.js?v=20260716-promotion-nav"></script>
-    <script src="./script.js?v=20260716-promotion-nav"></script>
+    <script src="./script.js?v=20260716-customer-memo-layout"></script>
     <script defer src="./pdf.min.js?v=3.11.174"></script>
   </body>
 </html>
