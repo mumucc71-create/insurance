@@ -33,6 +33,8 @@ const promotionTopicInput = document.querySelector("#promotionTopicInput");
 const promotionCommentInput = document.querySelector("#promotionCommentInput");
 const promotionImageInput = document.querySelector("#promotionImageInput");
 const promotionCropAspectInput = document.querySelector("#promotionCropAspectInput");
+const promotionImageCommandOutput = document.querySelector("#promotionImageCommandOutput");
+const copyPromotionImageCommandButton = document.querySelector("#copyPromotionImageCommandButton");
 const promotionSplitSizeInput = document.querySelector("#promotionSplitSizeInput");
 const splitPromotionImageButton = document.querySelector("#splitPromotionImageButton");
 const resizePromotionImageButton = document.querySelector("#resizePromotionImageButton");
@@ -1730,6 +1732,7 @@ function loadPromotionPost(id) {
   if (promotionMemoInput) promotionMemoInput.value = post.memo || "";
   if (promotionSourceTextInput) promotionSourceTextInput.value = post.sourceText || "";
   if (promotionOutput) promotionOutput.value = post.content || "";
+  updatePromotionImageCommand();
   showPromotionStatus("저장된 홍보글을 불러왔습니다.");
 }
 
@@ -3149,7 +3152,7 @@ function buildPromotionCaseText(caseItem = collectPromotionCase()) {
     `${storyParts || "한 고객님의 사례를 바탕으로"} ${topic} 관련 내용을 다시 살펴보게 되었습니다.`,
     "",
     caseItem.detail || "처음에는 단순한 확인 정도로 생각했지만, 실제로는 가입해둔 담보와 현재 상황을 하나씩 맞춰보는 과정이 필요했습니다.",
-    caseItem.amount ? `확인 결과 약 ${caseItem.amount} 정도의 중요한 포인트가 발견되었습니다.` : "확인 과정에서 놓치기 쉬운 보장, 청구 가능성, 필요한 서류가 하나씩 정리되었습니다.",
+    caseItem.amount ? `${caseItem.amount}을 지불했습니다.` : "확인 과정에서 놓치기 쉬운 보장, 청구 가능성, 필요한 서류가 하나씩 정리되었습니다.",
     "",
     "이런 사례에서 중요한 건 ‘보험을 많이 가입했는지’보다 ‘내 상황에 맞게 제대로 작동하는지’를 보는 것입니다.",
     "진단비, 수술비, 입원비, 실손, 후유장해처럼 항목별로 나누어 보면 평소에는 잘 보이지 않던 부분이 드러나는 경우가 많습니다.",
@@ -3746,6 +3749,28 @@ function getPromotionToneConfig() {
   return config;
 }
 
+function buildPromotionImageCommand() {
+  const topic = promotionTopicInput?.value.trim() || "숨은 보험금 찾기";
+  const tone = getPromotionToneConfig().label;
+  return [
+    "네이버 블로그에 넣을 어울리는 이미지 3장을 만들어줘.",
+    "각각 따로, 1200×900(4:3), 글자 없이 3단으로 만들어줘.",
+    `분위기는 ${tone}, 주제는 \"${topic}\".`,
+  ].join("\n");
+}
+
+function updatePromotionImageCommand() {
+  if (promotionImageCommandOutput) promotionImageCommandOutput.value = buildPromotionImageCommand();
+}
+
+function copyPromotionImageCommand() {
+  updatePromotionImageCommand();
+  const command = promotionImageCommandOutput?.value.trim();
+  if (!command) return;
+  copyText(command, "이미지 명령어 복사 완료");
+  showPromotionStatus("네이버 블로그 이미지 명령어를 복사했습니다.");
+}
+
 function getPromotionLengthBlocks(topic, multiplier, toneConfig) {
   const blocks = [
     `${toneConfig.emoji} 보험은 가입해두었다고 끝나는 것이 아니라, 시간이 지나면서 내 상황에 맞게 다시 점검해보는 과정이 필요합니다.`,
@@ -3829,14 +3854,6 @@ function buildPromotionCopy() {
     youtube_shorts: "유튜브 쇼츠",
     reels: "릴스",
   }[channel] || "네이버 블로그";
-  const imageGuide = {
-    blog: { target: "블로그", ratio: "16:9", size: "1200×675px" },
-    instagram: { target: "인스타그램", ratio: "4:5", size: "1080×1350px" },
-    kin: { target: "네이버 지식인", ratio: "4:3", size: "1200×900px" },
-    carrot: { target: "당근", ratio: "1:1", size: "1080×1080px" },
-    youtube_shorts: { target: "유튜브 쇼츠", ratio: "9:16", size: "1080×1920px" },
-    reels: { target: "릴스", ratio: "9:16", size: "1080×1920px" },
-  }[channel] || { target: "블로그", ratio: "16:9", size: "1200×675px" };
   const lengthLabel = multiplier === 3 ? "기본 글의 3배 분량" : multiplier === 2 ? "기본 글의 2배 분량" : "읽기 편한 기본 분량";
   const materials = [
     caseText ? `[자료 1 - 사례]\n${caseText}` : "",
@@ -3852,10 +3869,11 @@ function buildPromotionCopy() {
     `- 글 길이: ${lengthLabel}`,
     "- 자료의 문장을 그대로 복사하지 말고 핵심 내용을 자연스럽게 조합해 주세요.",
     "- 보험금 지급을 확정적으로 표현하거나 과장하지 말고, 확인과 상담이 필요하다는 방식으로 작성해 주세요.",
+    "- 보험 광고 관련 법규와 심의 기준에 걸리지 않도록 보수적으로 작성하고, 오해를 부르는 표현이나 객관적인 근거가 없는 비교·최상급 표현은 사용하지 마세요.",
+    "- ‘무조건’, ‘반드시’, ‘100%’, ‘전액 지급’, ‘누구나 받을 수 있다’처럼 지급이나 보장 결과를 단정하는 문구는 사용하지 마세요.",
     "- 제목과 본문을 포함하고 서로 다른 구성의 글 2안을 제시해 주세요.",
     channel === "carrot" ? "- 당근 동네생활 게시글처럼 친근하고 지역 주민에게 말하듯 작성하며, 광고처럼 과도하게 보이지 않게 해 주세요." : "",
     channel === "youtube_shorts" || channel === "reels" ? "- 짧은 세로 영상에 사용할 수 있도록 첫 문장을 강한 주목 문구로 만들고, 짧은 장면별 자막 구성도 함께 작성해 주세요." : "",
-    `- 이미지 3장을 만들어 주세요. 각 이미지는 ${imageGuide.target}용 이미지 ${imageGuide.ratio} 비율(${imageGuide.size})로 만들어 주세요.`,
     comment ? `- 독자가 남기도록 유도할 댓글 문구: ${comment}` : "- 독자가 궁금한 점을 댓글이나 상담으로 문의하도록 자연스럽게 안내해 주세요.",
     "",
     materialText,
@@ -3920,6 +3938,7 @@ function setPromotionMode(enabled, updateHash = true) {
     renderPromotionCaseList();
     renderPromotionIdeaList();
     renderPromotionEmojiBank();
+    updatePromotionImageCommand();
   }
   if (pageTitle) pageTitle.textContent = getMainPageTitle();
   if (updateHash) {
@@ -8830,6 +8849,9 @@ function bindApplicationUiEvents() {
   safeOn(generatePromotionButton, "click", generatePromotionCopy);
   safeOn(copyPromotionButton, "click", copyPromotionCopy);
   safeOn(savePromotionButton, "click", savePromotionPost);
+  safeOn(copyPromotionImageCommandButton, "click", copyPromotionImageCommand);
+  safeOn(promotionTopicInput, "input", updatePromotionImageCommand);
+  safeOn(promotionToneInput, "change", updatePromotionImageCommand);
   safeOn(promotionImageInput, "change", handlePromotionImageSelected);
   safeOn(splitPromotionImageButton, "click", splitPromotionImageIntoThree);
   safeOn(resizePromotionImageButton, "click", resizePromotionImageForChannel);

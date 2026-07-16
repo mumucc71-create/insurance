@@ -305,6 +305,11 @@
                     <option value="4:5">인스타 4:5</option>
                   </select>
                 </label>
+                <div class="promotion-image-command">
+                  <span>네이버 블로그 이미지 명령어</span>
+                  <textarea id="promotionImageCommandOutput" rows="3" readonly></textarea>
+                  <button id="copyPromotionImageCommandButton" class="secondary-button" type="button">명령어 복사</button>
+                </div>
                 <label>
                   <span class="promotion-message-title">사진에 넣을 메시지 <button id="stampPromotionImageButton" class="secondary-button promotion-inline-message-button" type="button">메시지 넣기</button><button id="removeStampPromotionImageButton" class="secondary-button promotion-inline-message-button" type="button">메시지 빼기</button></span>
                   <textarea id="promotionImageMessageInput" rows="3" placeholder="예: 홍길동 팀장&#10;010-0000-0000&#10;상담 문의 주세요"></textarea>
@@ -320,7 +325,7 @@
                     <button id="promotionGoogleSearchButton" class="secondary-button" type="button">구글 이미지 검색</button>
                   </div>
                 </div>
-                <div class="promotion-image-actions">
+                <div class="promotion-image-actions promotion-editor-toolbar">
                   <span class="promotion-toolbar-label">이미지 도구바</span>
                   <label class="promotion-toolbar-field promotion-toolbar-file-field">
                     <span>이미지</span>
@@ -336,7 +341,6 @@
                     <input id="promotionToolOpacityInput" type="range" min="0" max="100" value="70" />
                   </label>
                   <button id="saveEditedPromotionImageButton" class="secondary-button" type="button">이미지 저장</button>
-                  <span class="promotion-toolbar-break" aria-hidden="true"></span>
                   <button id="resetPromotionImageButton" class="secondary-button" type="button">원본으로</button>
                   <button id="undoPromotionImageButton" class="secondary-button" type="button">뒤로가기</button>
                 </div>
@@ -822,7 +826,7 @@
     <script src="./supabase-config.js?v=20260625-insurer-type-colors"></script>
     <script src="./disease-code-db.js?v=20260713-universe-disclosure"></script>
     <script src="./auth-boot.js?v=20260716-promotion-nav"></script>
-    <script src="./script.js?v=20260716-both-split"></script>
+    <script src="./script.js?v=20260716-image-command"></script>
     <script defer src="./pdf.min.js?v=3.11.174"></script>
   </body>
 </html>
