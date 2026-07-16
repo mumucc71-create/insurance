@@ -42,6 +42,7 @@ const customerSearchResults = document.querySelector("#customerSearchResults");
 const saveCustomerButton = document.querySelector("#saveCustomerButton");
 const loadCustomerButton = document.querySelector("#loadCustomerButton");
 const recoverCustomerButton = document.querySelector("#recoverCustomerButton");
+const dedupeCustomerButton = document.querySelector("#dedupeCustomerButton");
 const newCustomerButton = document.querySelector("#newCustomerButton");
 const deleteCustomerButton = document.querySelector("#deleteCustomerButton");
 const managerStatus = document.querySelector("#managerStatus");
@@ -124,6 +125,7 @@ const designManagerStorageKey = "insuranceDesignManagers";
 const phoneConsultationStorageKey = "insurancePhoneConsultationMemos";
 const phoneConsultationCommonTemplateStorageKey = "insurancePhoneConsultationCommonTemplate";
 const deletedCustomersStorageKey = "insuranceDisclosureDeletedCustomers";
+const uiSessionStorageKey = "insuranceDisclosureUiSession";
 let activePhoneConsultationId = "";
 let autoSaveTimer = null;
 let cloudSyncTimer = null;
@@ -232,6 +234,11 @@ function mergeDraftSnapshots(...drafts) {
         Array.isArray(oldest?.designManagers) ? oldest.designManagers : [],
         Array.isArray(latest?.designManagers) ? latest.designManagers : [],
       ),
+      phoneConsultationMemos: mergePhoneConsultationMemos(
+        Array.isArray(oldest?.phoneConsultationMemos) ? oldest.phoneConsultationMemos : [],
+        Array.isArray(latest?.phoneConsultationMemos) ? latest.phoneConsultationMemos : [],
+      ),
+      phoneConsultationCommonTemplate: latest?.phoneConsultationCommonTemplate ?? oldest?.phoneConsultationCommonTemplate ?? "",
       universeDisclosureText: latest?.universeDisclosureText || oldest?.universeDisclosureText || "",
       medicalAnalysisJson: latest?.medicalAnalysisJson ?? oldest?.medicalAnalysisJson ?? null,
       updatedAt: latest?.updatedAt || oldest?.updatedAt || new Date().toISOString(),
@@ -466,6 +473,57 @@ function getStoredCustomers() {
 function setStoredCustomers(customers) {
   localStorage.setItem(getScopedStorageKey(customerStorageKey), JSON.stringify(customers));
   scheduleCloudSync();
+}
+
+function getCurrentViewMode() {
+  if (document.body.classList.contains("phone-consultation-mode")) return "phone";
+  if (document.body.classList.contains("design-manager-mode")) return "insurers";
+  if (document.body.classList.contains("contract-management-mode")) return "contracts";
+  return "main";
+}
+
+function rememberUiSession(extra = {}) {
+  if (!currentSession?.user?.id) return;
+  const previous = readJsonStorage(getScopedStorageKey(uiSessionStorageKey), {});
+  const selectedId = savedCustomerSelect?.value || previous.selectedId || "";
+  localStorage.setItem(
+    getScopedStorageKey(uiSessionStorageKey),
+    JSON.stringify({
+      ...previous,
+      selectedId,
+      viewMode: getCurrentViewMode(),
+      updatedAt: new Date().toISOString(),
+      ...extra,
+    }),
+  );
+}
+
+function getRememberedUiSession() {
+  const session = readJsonStorage(getScopedStorageKey(uiSessionStorageKey), {});
+  return session && typeof session === "object" ? session : {};
+}
+
+function getInitialViewMode() {
+  if (window.location.hash === "#phone-consultation") return "phone";
+  if (window.location.hash === "#insurers" || window.location.hash === "#design-manager") return "insurers";
+  if (window.location.hash === "#contracts") return "contracts";
+  return getRememberedUiSession().viewMode || "main";
+}
+
+function restoreRememberedViewMode() {
+  const mode = getInitialViewMode();
+  if (mode === "phone") {
+    setPhoneConsultationMode(true);
+  } else if (mode === "insurers") {
+    setDesignManagerMode(true);
+  } else if (mode === "contracts") {
+    setContractManagementMode(true);
+  } else {
+    setContractManagementMode(false, false);
+    setDesignManagerMode(false, false);
+    setPhoneConsultationMode(false, false);
+    if (pageTitle) pageTitle.textContent = getMainPageTitle();
+  }
 }
 
 async function flushCloudSyncNow(reason = "수동 저장") {
@@ -879,6 +937,7 @@ function savePhoneConsultationCommonTemplate() {
   setStoredPhoneConsultationCommonTemplate(content);
   const result = savePhoneConsultationCommonTemplateAsMemo(content);
   renderPhoneConsultationMemoButtons();
+  scheduleCloudSync();
 
   if (result.saved) {
     showPhoneConsultationStatus(`공통 양식을 저장하고 "${result.title}" 버튼을 만들었습니다.`);
@@ -932,6 +991,44 @@ function formatPhoneConsultationSavedAt(value) {
 
 function sortPhoneConsultationMemos(memos) {
   return [...memos].sort((left, right) => new Date(right.updatedAt || right.createdAt || 0) - new Date(left.updatedAt || left.createdAt || 0));
+}
+
+function mergePhoneConsultationMemos(...memoLists) {
+  const merged = new Map();
+  memoLists.flat().filter(Boolean).forEach((memo) => {
+    if (!memo?.id) return;
+    const previous = merged.get(memo.id);
+    const memoTime = new Date(memo.updatedAt || memo.createdAt || 0).getTime();
+    const previousTime = new Date(previous?.updatedAt || previous?.createdAt || 0).getTime();
+    if (!previous || memoTime >= previousTime) merged.set(memo.id, memo);
+  });
+  return sortPhoneConsultationMemos([...merged.values()]);
+}
+
+function persistPhoneConsultationCloudDataFromDraft(draft) {
+  if (!draft || typeof draft !== "object") return false;
+  let changed = false;
+
+  if (Array.isArray(draft.phoneConsultationMemos)) {
+    const mergedMemos = mergePhoneConsultationMemos(
+      getStoredPhoneConsultationMemos(),
+      draft.phoneConsultationMemos,
+    );
+    if (mergedMemos.length) {
+      setStoredPhoneConsultationMemos(mergedMemos);
+      changed = true;
+    }
+  }
+
+  if (typeof draft.phoneConsultationCommonTemplate === "string") {
+    const currentTemplate = getStoredPhoneConsultationCommonTemplate();
+    if (draft.phoneConsultationCommonTemplate && draft.phoneConsultationCommonTemplate !== currentTemplate) {
+      setStoredPhoneConsultationCommonTemplate(draft.phoneConsultationCommonTemplate);
+      changed = true;
+    }
+  }
+
+  return changed;
 }
 
 function renderPhoneConsultationMemoButtons(selectedId = activePhoneConsultationId) {
@@ -1025,6 +1122,7 @@ function savePhoneConsultationMemo() {
   }
 
   renderPhoneConsultationMemoButtons(activePhoneConsultationId);
+  scheduleCloudSync();
   showPhoneConsultationStatus("전화상담 메모를 저장했습니다.");
 }
 
@@ -1041,6 +1139,7 @@ function deletePhoneConsultationMemo() {
   }
 
   clearPhoneConsultationForm();
+  scheduleCloudSync();
   showPhoneConsultationStatus("메모를 삭제했습니다.");
 }
 
@@ -1060,6 +1159,7 @@ function setPhoneConsultationMode(enabled, updateHash = true) {
     const nextUrl = enabled ? "#phone-consultation" : window.location.pathname + window.location.search;
     window.history.replaceState(null, "", nextUrl);
   }
+  rememberUiSession({ viewMode: getCurrentViewMode() });
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
@@ -1262,6 +1362,7 @@ function recoverAllStoredDataToCurrentAccount({ quiet = false } = {}) {
   }
   if (mergedDraft) {
     persistDraftSnapshot(mergedDraft);
+    persistPhoneConsultationCloudDataFromDraft(mergedDraft);
   }
 
   if (!quiet && recoveredCustomerCount > 0) {
@@ -1458,11 +1559,11 @@ async function pushCloudSnapshot() {
   }
 
   setSyncStatus("저장 중");
-  const { row: latestCloudRow, error: fetchError } = await fetchCloudSnapshot();
+  let { row: latestCloudRow, error: fetchError } = await fetchCloudSnapshot();
   if (fetchError) {
-    setSyncStatus("저장 차단됨", { reason: fetchError.message });
-    showManagerStatus(`클라우드 최신 데이터 확인 실패: ${fetchError.message}`);
-    return;
+    latestCloudRow = null;
+    setSyncStatus("최신 확인 실패, 현재 저장본으로 저장 시도", { reason: fetchError.message });
+    showManagerStatus("클라우드 최신 확인은 실패했지만 현재 저장본으로 저장을 계속 시도합니다.");
   }
 
   const draft = readJsonStorage(getScopedStorageKey(autoSaveDraftKey));
@@ -1473,6 +1574,9 @@ async function pushCloudSnapshot() {
   const mergedCustomers = removeDeletedCustomers(mergedBeforeDelete, deletedIds);
   const latestDesignManagers = Array.isArray(latestCloudRow?.draft?.designManagers) ? latestCloudRow.draft.designManagers : [];
   const mergedDesignManagers = mergeDesignManagers(latestDesignManagers, getStoredDesignManagers());
+  const latestPhoneMemos = Array.isArray(latestCloudRow?.draft?.phoneConsultationMemos) ? latestCloudRow.draft.phoneConsultationMemos : [];
+  const mergedPhoneMemos = mergePhoneConsultationMemos(latestPhoneMemos, getStoredPhoneConsultationMemos());
+  const phoneTemplate = getStoredPhoneConsultationCommonTemplate();
 
   console.info("[sync] 저장 직전 서버 최신 customers 개수", latestCloudCustomers.length);
   console.info("[sync] 저장 직전 로컬 캐시 customers 개수", localCustomers.length);
@@ -1490,6 +1594,8 @@ async function pushCloudSnapshot() {
       updatedAt: new Date().toISOString(),
       state: draft?.state || collectCustomerState(),
       designManagers: mergedDesignManagers,
+      phoneConsultationMemos: mergedPhoneMemos,
+      phoneConsultationCommonTemplate: phoneTemplate,
       universeDisclosureText,
       medicalAnalysisJson,
     },
@@ -1498,6 +1604,8 @@ async function pushCloudSnapshot() {
     updatedAt: new Date().toISOString(),
     state: draft?.state || collectCustomerState(),
     designManagers: mergedDesignManagers,
+    phoneConsultationMemos: mergedPhoneMemos,
+    phoneConsultationCommonTemplate: phoneTemplate,
     universeDisclosureText,
     medicalAnalysisJson,
   };
@@ -1544,7 +1652,7 @@ async function pushCloudSnapshot() {
     clearPendingDeletedCustomerIds();
     console.info("[sync] 저장 후 서버에 저장된 customers 개수", mergedCustomers.length);
     setSyncStatus("저장 완료", { savedCustomers: mergedCustomers.length });
-    showManagerStatus("클라우드 자동 저장됨");
+    showManagerStatus("클라우드 저장 완료");
   }
 }
 
@@ -1564,19 +1672,31 @@ function restoreUiFromCurrentStorage() {
   customerSearchInput.value = "";
   renderDesignManagers();
 
-  const restoredDraft = restoreAutoSavedDraft();
-  if (!restoredDraft) {
-    restoreCustomersToUi();
-  } else if (recovery.customers.length) {
+  const remembered = getRememberedUiSession();
+  const rememberedCustomer = remembered.selectedId
+    ? recovery.customers.find((customer) => customer.id === remembered.selectedId)
+    : null;
+
+  if (rememberedCustomer) {
+    applyCustomerState(rememberedCustomer.state);
+    savedCustomerSelect.value = rememberedCustomer.id;
+    showManagerStatus("마지막으로 보던 고객 정보를 불러왔습니다.");
+  } else {
     const draft = readJsonStorage(getScopedStorageKey(autoSaveDraftKey));
-    const selectedId = draft?.selectedId && recovery.customers.some((customer) => customer.id === draft.selectedId)
-      ? draft.selectedId
-      : recovery.customers[0].id;
-    savedCustomerSelect.value = selectedId;
+    const draftCustomer = draft?.selectedId
+      ? recovery.customers.find((customer) => customer.id === draft.selectedId)
+      : null;
+    if (draftCustomer) {
+      applyCustomerState(draftCustomer.state);
+      savedCustomerSelect.value = draftCustomer.id;
+    } else {
+      restoreCustomersToUi();
+    }
   }
 
   renderSavedCustomerList(savedCustomerSelect.value);
   renderOutput();
+  restoreRememberedViewMode();
 
   if (!localMode && hasCloudHydrated && recovery.recoveredCustomerCount > 0) {
     scheduleCloudSync();
@@ -1609,7 +1729,10 @@ async function hydrateFromCloud() {
     localStorage.setItem(customerKey, JSON.stringify(mergedCustomers));
     localStorage.setItem(designManagerKey, JSON.stringify(mergeDesignManagers(scopedDesignManagers, legacyDesignManagers)));
     const fallbackDraft = mergeDraftSnapshots(scopedDraft, legacyDraft);
-    if (fallbackDraft) persistDraftSnapshot(fallbackDraft);
+    if (fallbackDraft) {
+      persistDraftSnapshot(fallbackDraft);
+      persistPhoneConsultationCloudDataFromDraft(fallbackDraft);
+    }
 
     isHydratingCloud = false;
     hasCloudHydrated = true;
@@ -1638,6 +1761,7 @@ async function hydrateFromCloud() {
     const mergedDraft = mergeDraftSnapshots(cloudDraft, scopedDraft, legacyDraft);
     if (mergedDraft) {
       persistDraftSnapshot(mergedDraft);
+      persistPhoneConsultationCloudDataFromDraft(mergedDraft);
       if (!cloudDraft?.state && (scopedDraft?.state || legacyDraft?.state)) {
         shouldPushAfterHydrate = true;
       }
@@ -1665,7 +1789,10 @@ async function hydrateFromCloud() {
     localStorage.setItem(customerKey, JSON.stringify(mergedCustomers));
     localStorage.setItem(designManagerKey, JSON.stringify(mergeDesignManagers(scopedDesignManagers, legacyDesignManagers)));
     const migrationDraft = mergeDraftSnapshots(scopedDraft, legacyDraft);
-    if (migrationDraft) persistDraftSnapshot(migrationDraft);
+    if (migrationDraft) {
+      persistDraftSnapshot(migrationDraft);
+      persistPhoneConsultationCloudDataFromDraft(migrationDraft);
+    }
     if (mergedCustomers.length || migrationDraft) shouldPushAfterHydrate = true;
   }
 
@@ -1751,11 +1878,8 @@ function registerInsuranceAuthKernel() {
     onPageHide: () => {
       if (appRoot?.classList.contains("is-auth-hidden")) return;
       window.clearTimeout(autoSaveTimer);
-      runAutoSave();
+      rememberUiSession();
       persistAuthSessionSnapshot();
-      if (!localMode && currentSession?.access_token) {
-        void pushCloudSnapshot();
-      }
     },
     onAppReady: () => {
       void initializeAuthentication();
@@ -1952,10 +2076,9 @@ async function signupWithEmail() {
 
 async function logoutCustomerApp() {
   window.clearTimeout(autoSaveTimer);
-  runAutoSave();
+  rememberUiSession();
 
   if (!localMode && supabaseClient && currentSession?.access_token) {
-    await pushCloudSnapshot();
     await supabaseJson("/auth/v1/logout", {
       method: "POST",
       authToken: currentSession.access_token,
@@ -1983,6 +2106,7 @@ function setContractManagementMode(enabled, updateHash = true) {
     window.history.replaceState(null, "", nextUrl);
   }
 
+  rememberUiSession({ viewMode: getCurrentViewMode() });
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
@@ -1999,6 +2123,7 @@ function setDesignManagerMode(enabled, updateHash = true) {
     window.history.replaceState(null, "", nextUrl);
   }
 
+  rememberUiSession({ viewMode: getCurrentViewMode() });
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
@@ -2007,6 +2132,7 @@ function goMainMode() {
   setDesignManagerMode(false, false);
   setPhoneConsultationMode(false, false);
   window.history.replaceState(null, "", window.location.pathname + window.location.search);
+  rememberUiSession({ viewMode: "main" });
 }
 
 function selectedValue(container, selector) {
@@ -3152,7 +3278,6 @@ async function handleUniverseFileUpload(file) {
     copyStatus.textContent = message;
     showManagerStatus(message);
     renderOutput();
-    saveAutoDraft();
   } finally {
     window.setTimeout(() => {
       copyStatus.textContent = "";
@@ -4866,11 +4991,7 @@ function buildUniverseDisclosureLines() {
 function insertDisclosureToCustomerCopy(text) {
   universeDisclosureText = text;
   renderOutput();
-  saveAutoDraft();
-  const savedId = upsertAutoSavedCustomer(collectCustomerState());
-  if (savedId) {
-    renderSavedCustomerList(savedId);
-  }
+  rememberUiSession();
 }
 
 function getBirthDateForInsurer() {
@@ -5112,6 +5233,61 @@ function getLoadCustomerSearchKeyword() {
   return getCustomerSearchKeyword() || normalizeSearchText(getFieldValue("customerName"));
 }
 
+function getCustomerDedupeKey(customer) {
+  const fields = customer?.state?.fields ?? {};
+  const name = normalizeSearchText(fields.customerName);
+  if (!name) return customer?.id || "";
+  const resident = String(fields.residentNumber ?? "").replace(/\D/g, "");
+  const birthDate = String(fields.birthDate ?? "").replace(/\D/g, "");
+  const phone = String(fields.phoneCarrier ?? "").replace(/\D/g, "");
+  return [name, resident || birthDate, phone].filter(Boolean).join("|") || name;
+}
+
+function dedupeStoredCustomers() {
+  const customers = getStoredCustomers();
+  if (customers.length < 2) {
+    showManagerStatus("정리할 중복 고객이 없습니다.");
+    return;
+  }
+
+  const grouped = new Map();
+  customers.forEach((customer) => {
+    const key = getCustomerDedupeKey(customer);
+    if (!key) return;
+    const list = grouped.get(key) || [];
+    list.push(customer);
+    grouped.set(key, list);
+  });
+
+  const duplicateGroups = [...grouped.values()].filter((list) => list.length > 1);
+  if (!duplicateGroups.length) {
+    showManagerStatus("같은 이름/정보의 중복 고객을 찾지 못했습니다.");
+    return;
+  }
+
+  const duplicateCount = duplicateGroups.reduce((sum, list) => sum + list.length - 1, 0);
+  if (!confirm(`중복 고객 ${duplicateCount}건을 정리할까요?\n\n같은 이름/생년월일/연락처로 보이는 고객은 가장 최근 저장본만 남깁니다.`)) {
+    return;
+  }
+
+  const kept = [];
+  grouped.forEach((list) => {
+    const sorted = [...list].sort((a, b) => new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0));
+    kept.push(sorted[0]);
+  });
+
+  setStoredCustomers(kept);
+  const selectedStillExists = kept.some((customer) => customer.id === savedCustomerSelect.value);
+  const selectedId = selectedStillExists ? savedCustomerSelect.value : kept[0]?.id || "";
+  if (selectedId) {
+    const selected = kept.find((customer) => customer.id === selectedId);
+    if (selected) applyCustomerState(selected.state);
+  }
+  renderSavedCustomerList(selectedId);
+  rememberUiSession({ selectedId });
+  showManagerStatus(`중복 고객 ${duplicateCount}건을 정리했습니다. 현재 고객 저장을 눌러 클라우드에 반영해주세요.`);
+}
+
 function getFilteredCustomers(keyword = getCustomerSearchKeyword()) {
   return getStoredCustomers()
     .filter((customer) => {
@@ -5176,11 +5352,12 @@ function saveAutoDraft(state = collectCustomerState()) {
       updatedAt: new Date().toISOString(),
       state,
       designManagers: getStoredDesignManagers(),
+      phoneConsultationMemos: getStoredPhoneConsultationMemos(),
+      phoneConsultationCommonTemplate: getStoredPhoneConsultationCommonTemplate(),
       universeDisclosureText,
       medicalAnalysisJson,
     }),
   );
-  scheduleCloudSync();
 }
 
 function upsertAutoSavedCustomer(state) {
@@ -5220,15 +5397,7 @@ function upsertAutoSavedCustomer(state) {
 }
 
 function runAutoSave() {
-  const state = collectCustomerState();
-  saveAutoDraft(state);
-  const savedId = upsertAutoSavedCustomer(state);
-
-  if (savedId) {
-    renderSavedCustomerList(savedId);
-  }
-
-  showManagerStatus("자동 저장됨");
+  rememberUiSession();
 }
 
 async function saveCurrentCustomerAndSync() {
@@ -5238,7 +5407,7 @@ async function saveCurrentCustomerAndSync() {
 
 function scheduleAutoSave() {
   window.clearTimeout(autoSaveTimer);
-  autoSaveTimer = window.setTimeout(runAutoSave, 700);
+  autoSaveTimer = window.setTimeout(rememberUiSession, 700);
 }
 
 function restoreAutoSavedDraft() {
@@ -5299,6 +5468,7 @@ function saveCurrentCustomer() {
   setStoredCustomers(customers);
   saveAutoDraft(state);
   renderSavedCustomerList(id);
+  rememberUiSession({ selectedId: id });
   showManagerStatus("고객 정보가 저장되었습니다.");
 }
 
@@ -5313,7 +5483,7 @@ function loadCustomerById(selectedId) {
 
   applyCustomerState(customer.state);
   savedCustomerSelect.value = selectedId;
-  saveAutoDraft(customer.state);
+  rememberUiSession({ selectedId });
   showManagerStatus("고객 정보를 불러왔습니다.");
 }
 
@@ -5360,6 +5530,7 @@ function deleteSelectedCustomer() {
   addPendingDeletedCustomerId(selectedId);
   setStoredCustomers(customers.filter((item) => item.id !== selectedId));
   localStorage.removeItem(getScopedStorageKey(autoSaveDraftKey));
+  rememberUiSession({ selectedId: "" });
   scheduleCloudSync();
   renderSavedCustomerList();
   showManagerStatus("저장 정보가 삭제되었습니다.");
@@ -5391,6 +5562,7 @@ function startNewCustomer() {
   savedCustomerSelect.value = "";
   customerSearchInput.value = "";
   localStorage.removeItem(getScopedStorageKey(autoSaveDraftKey));
+  rememberUiSession({ selectedId: "" });
   renderSavedCustomerList();
   showManagerStatus("새 고객 입력 화면입니다. 기존 서버 데이터는 유지됩니다.");
 }
@@ -5787,6 +5959,7 @@ function bindApplicationUiEvents() {
   });
   safeOn(loadCustomerButton, "click", loadSelectedCustomer);
   safeOn(recoverCustomerButton, "click", recoverStoredCustomersManually);
+  safeOn(dedupeCustomerButton, "click", dedupeStoredCustomers);
   safeOn(newCustomerButton, "click", startNewCustomer);
   safeOn(deleteCustomerButton, "click", deleteSelectedCustomer);
   safeOn(customerSearchInput, "input", () => renderSavedCustomerList(savedCustomerSelect.value));
