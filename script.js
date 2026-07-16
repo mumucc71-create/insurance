@@ -1189,6 +1189,25 @@ function persistPhoneConsultationCloudDataFromDraft(draft) {
   return changed;
 }
 
+function getPhoneConsultationMemoGroup(memo) {
+  const text = `${memo?.title || ""} ${memo?.content || ""}`.toLowerCase();
+  if (/숨은|보험금|청구|실손|실비|환급|보상|서류/.test(text)) {
+    return "claim";
+  }
+  if (/진단|수술|입원|암|뇌|심장|질병|상해|후유|간병|보장/.test(text)) {
+    return "coverage";
+  }
+  return "general";
+}
+
+function getPhoneConsultationMemoGroups(memos) {
+  return [
+    { id: "claim", title: "보험금·청구", memos: memos.filter((memo) => getPhoneConsultationMemoGroup(memo) === "claim") },
+    { id: "coverage", title: "진단비·보장", memos: memos.filter((memo) => getPhoneConsultationMemoGroup(memo) === "coverage") },
+    { id: "general", title: "기타 상담", memos: memos.filter((memo) => getPhoneConsultationMemoGroup(memo) === "general") },
+  ];
+}
+
 function renderPhoneConsultationMemoButtons(selectedId = activePhoneConsultationId) {
   if (!phoneConsultationMemoList) return;
   const memos = getOrderedPhoneConsultationMemos();
@@ -1202,16 +1221,40 @@ function renderPhoneConsultationMemoButtons(selectedId = activePhoneConsultation
     return;
   }
 
-  memos.forEach((memo) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "phone-consultation-memo-button";
-    if (memo.id === selectedId) button.classList.add("is-selected");
-    button.dataset.memoId = memo.id;
-    button.draggable = true;
-    button.title = "마우스로 끌어서 순서를 바꿀 수 있습니다.";
-    button.textContent = memo.title || "제목 없음";
-    phoneConsultationMemoList.append(button);
+  getPhoneConsultationMemoGroups(memos).forEach((group) => {
+    const column = document.createElement("div");
+    column.className = "phone-consultation-memo-column";
+    column.dataset.memoGroup = group.id;
+
+    const title = document.createElement("strong");
+    title.className = "phone-consultation-memo-column-title";
+    title.textContent = group.title;
+    column.append(title);
+
+    const buttons = document.createElement("div");
+    buttons.className = "phone-consultation-memo-column-buttons";
+
+    if (!group.memos.length) {
+      const empty = document.createElement("span");
+      empty.className = "phone-consultation-memo-column-empty";
+      empty.textContent = "없음";
+      buttons.append(empty);
+    }
+
+    group.memos.forEach((memo) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "phone-consultation-memo-button";
+      if (memo.id === selectedId) button.classList.add("is-selected");
+      button.dataset.memoId = memo.id;
+      button.draggable = true;
+      button.title = "마우스로 끌어서 순서를 바꿀 수 있습니다.";
+      button.textContent = memo.title || "제목 없음";
+      buttons.append(button);
+    });
+
+    column.append(buttons);
+    phoneConsultationMemoList.append(column);
   });
 }
 
@@ -5476,18 +5519,8 @@ function renderOutput() {
 function buildCustomerLabel(customer) {
   const name = customer.state?.fields?.customerName || "이름없음";
   const residentNumber = customer.state?.fields?.residentNumber || customer.state?.fields?.birthDate;
-  const firstContract = customer.state?.contracts?.find((contract) => contract.company || contract.product) ?? {};
-  const company = firstContract.company || customer.state?.fields?.insuranceCompany;
-  const product = firstContract.product || customer.state?.fields?.insuranceProduct;
-  const finalChoices = customer.state?.comparison?.filter((row) => row.selected) ?? [];
-  const firstFinalSummary = finalChoices.length
-    ? [finalChoices[0].company, finalChoices[0].product, finalChoices[0].price].filter(Boolean).join(" ")
-    : "";
-  const finalSummary = finalChoices.length > 1
-    ? `${firstFinalSummary || "최종상품"} 외 ${finalChoices.length - 1}건`
-    : firstFinalSummary;
   const savedDate = customer.updatedAt ? new Date(customer.updatedAt).toLocaleString("ko-KR") : "";
-  return [name, residentNumber, finalSummary || company, finalSummary ? "" : product, savedDate].filter(Boolean).join(" / ");
+  return [name, residentNumber, savedDate].filter(Boolean).join(" / ");
 }
 
 function normalizeSearchText(value) {
@@ -5611,25 +5644,33 @@ function renderCustomerSearchResults(customers) {
   const keyword = getCustomerSearchKeyword();
   customerSearchResults.innerHTML = "";
 
-  if (!keyword) {
-    return;
-  }
-
   if (!customers.length) {
     const empty = document.createElement("p");
     empty.className = "customer-search-empty";
-    empty.textContent = "검색 결과가 없습니다.";
+    empty.textContent = keyword ? "검색 결과가 없습니다." : "저장된 고객이 없습니다.";
     customerSearchResults.append(empty);
     return;
   }
 
-  customers.slice(0, 20).forEach((customer) => {
+  customers.slice(0, 50).forEach((customer) => {
+    const row = document.createElement("div");
+    row.className = "customer-result-row";
+
     const button = document.createElement("button");
     button.className = "customer-result-button";
     button.type = "button";
     button.dataset.customerId = customer.id;
     button.textContent = buildCustomerLabel(customer);
-    customerSearchResults.append(button);
+
+    const deleteButton = document.createElement("button");
+    deleteButton.className = "customer-result-delete";
+    deleteButton.type = "button";
+    deleteButton.dataset.customerDeleteId = customer.id;
+    deleteButton.title = "이 고객 삭제";
+    deleteButton.textContent = "×";
+
+    row.append(button, deleteButton);
+    customerSearchResults.append(row);
   });
 }
 
@@ -5827,8 +5868,10 @@ function loadSelectedCustomer() {
 }
 
 function deleteSelectedCustomer() {
-  const selectedId = savedCustomerSelect.value;
+  deleteCustomerById(savedCustomerSelect.value);
+}
 
+function deleteCustomerById(selectedId) {
   if (!selectedId) {
     alert("삭제할 고객을 선택해주세요.");
     return;
@@ -6328,6 +6371,12 @@ function bindApplicationUiEvents() {
   safeOn(deleteCustomerButton, "click", deleteSelectedCustomer);
   safeOn(customerSearchInput, "input", () => renderSavedCustomerList(savedCustomerSelect.value));
   safeOn(customerSearchResults, "click", (event) => {
+    const deleteButton = event.target.closest("[data-customer-delete-id]");
+    if (deleteButton) {
+      deleteCustomerById(deleteButton.dataset.customerDeleteId);
+      return;
+    }
+
     const button = event.target.closest("[data-customer-id]");
     if (!button) return;
     savedCustomerSelect.value = button.dataset.customerId;
