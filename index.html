@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>보험 고객 관리용 입력 시스템</title>
-    <link rel="stylesheet" href="./styles.css?v=20260716-memo-delete" />
+    <link rel="stylesheet" href="./styles.css?v=20260716-promotion-options" />
   </head>
   <body>
     <section id="authScreen" class="auth-screen">
@@ -268,13 +268,72 @@
                 </select>
               </label>
               <label>
+                <span>글 분위기</span>
+                <select id="promotionToneInput">
+                  <option value="cute">귀엽게 😊</option>
+                  <option value="feminine">여성스럽게 🌷</option>
+                  <option value="expert">전문가스럽게 📌</option>
+                </select>
+              </label>
+              <label>
+                <span>글 길이</span>
+                <select id="promotionLengthInput">
+                  <option value="1">기본</option>
+                  <option value="2">2배 길게</option>
+                  <option value="3">3배 자세히</option>
+                </select>
+              </label>
+              <label>
                 <span>주제</span>
                 <input id="promotionTopicInput" type="text" placeholder="예: 숨은 보험금 찾기, 진단비 점검, 실손 청구" autocomplete="off" />
+              </label>
+              <label>
+                <span>원하는 댓글</span>
+                <input id="promotionCommentInput" type="text" placeholder="예: 저도 참여합니다 / 쪽지 보냈습니다" autocomplete="off" />
               </label>
               <label>
                 <span>이미지 업로드</span>
                 <input id="promotionImageInput" type="file" accept="image/*" />
               </label>
+              <div class="promotion-image-tools">
+                <label>
+                  <span>이미지 크롭</span>
+                  <select id="promotionCropAspectInput">
+                    <option value="original">원본 비율</option>
+                    <option value="1:1">정사각형 1:1</option>
+                    <option value="4:3">블로그 4:3</option>
+                    <option value="16:9">가로 16:9</option>
+                    <option value="4:5">인스타 4:5</option>
+                  </select>
+                </label>
+                <label>
+                  <span>사진에 넣을 이름</span>
+                  <input id="promotionImageNameInput" type="text" placeholder="예: 홍길동 팀장" autocomplete="off" />
+                </label>
+                <label>
+                  <span>사진에 넣을 연락처</span>
+                  <input id="promotionImagePhoneInput" type="text" placeholder="예: 010-0000-0000" autocomplete="off" />
+                </label>
+                <div class="promotion-image-actions">
+                  <button id="cropPromotionImageButton" class="secondary-button" type="button">크롭</button>
+                  <button id="stampPromotionImageButton" class="secondary-button" type="button">이름/연락처 넣기</button>
+                  <button id="downloadPromotionImageButton" class="secondary-button" type="button" disabled>크롭 이미지 저장</button>
+                </div>
+                <div class="promotion-image-preview">
+                  <img id="promotionImagePreview" alt="업로드 이미지 미리보기" hidden />
+                  <canvas id="promotionCropCanvas" hidden></canvas>
+                </div>
+              </div>
+              <div class="promotion-search-tools">
+                <label>
+                  <span>홍보 이미지/글감 검색</span>
+                  <input id="promotionSearchInput" type="text" placeholder="예: 숨은 보험금 찾기 카드뉴스" autocomplete="off" />
+                </label>
+                <div class="promotion-image-actions">
+                  <button id="promotionNaverSearchButton" class="secondary-button" type="button">네이버 검색</button>
+                  <button id="promotionPinterestSearchButton" class="secondary-button" type="button">핀터레스트 검색</button>
+                </div>
+              </div>
               <label>
                 <span>추가 포인트</span>
                 <textarea id="promotionMemoInput" rows="4" placeholder="강조하고 싶은 내용, 대상 고객, 상담 문구 등을 적어주세요"></textarea>
@@ -282,12 +341,17 @@
               <div class="manager-actions">
                 <button id="generatePromotionButton" type="button">글 작성</button>
                 <button id="copyPromotionButton" class="secondary-button" type="button">복사</button>
+                <button id="savePromotionButton" class="secondary-button" type="button">저장</button>
               </div>
             </div>
             <label>
               <span>작성된 글</span>
               <textarea id="promotionOutput" rows="18" placeholder="글 작성 버튼을 누르면 여기에 홍보 글이 생성됩니다."></textarea>
             </label>
+            <div class="promotion-saved-posts">
+              <span class="promotion-saved-label">저장된 홍보글</span>
+              <div id="promotionSavedList" class="promotion-saved-list" aria-live="polite"></div>
+            </div>
             <p id="promotionStatus" class="manager-status" role="status" aria-live="polite"></p>
           </section>
 
@@ -705,7 +769,7 @@
     <script src="./supabase-config.js?v=20260625-insurer-type-colors"></script>
     <script src="./disease-code-db.js?v=20260713-universe-disclosure"></script>
     <script src="./auth-boot.js?v=20260716-promotion-nav"></script>
-    <script src="./script.js?v=20260716-memo-delete"></script>
+    <script src="./script.js?v=20260716-promotion-options"></script>
     <script defer src="./pdf.min.js?v=3.11.174"></script>
   </body>
 </html>

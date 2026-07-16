@@ -27,12 +27,28 @@ const phoneConsultationCommonTemplateInput = document.querySelector("#phoneConsu
 const savePhoneConsultationCommonTemplateButton = document.querySelector("#savePhoneConsultationCommonTemplateButton");
 const insertPhoneConsultationCommonTemplateButton = document.querySelector("#insertPhoneConsultationCommonTemplateButton");
 const promotionChannelInput = document.querySelector("#promotionChannelInput");
+const promotionToneInput = document.querySelector("#promotionToneInput");
+const promotionLengthInput = document.querySelector("#promotionLengthInput");
 const promotionTopicInput = document.querySelector("#promotionTopicInput");
+const promotionCommentInput = document.querySelector("#promotionCommentInput");
 const promotionImageInput = document.querySelector("#promotionImageInput");
+const promotionCropAspectInput = document.querySelector("#promotionCropAspectInput");
+const cropPromotionImageButton = document.querySelector("#cropPromotionImageButton");
+const stampPromotionImageButton = document.querySelector("#stampPromotionImageButton");
+const downloadPromotionImageButton = document.querySelector("#downloadPromotionImageButton");
+const promotionImagePreview = document.querySelector("#promotionImagePreview");
+const promotionCropCanvas = document.querySelector("#promotionCropCanvas");
+const promotionImageNameInput = document.querySelector("#promotionImageNameInput");
+const promotionImagePhoneInput = document.querySelector("#promotionImagePhoneInput");
+const promotionSearchInput = document.querySelector("#promotionSearchInput");
+const promotionNaverSearchButton = document.querySelector("#promotionNaverSearchButton");
+const promotionPinterestSearchButton = document.querySelector("#promotionPinterestSearchButton");
 const promotionMemoInput = document.querySelector("#promotionMemoInput");
 const generatePromotionButton = document.querySelector("#generatePromotionButton");
 const copyPromotionButton = document.querySelector("#copyPromotionButton");
+const savePromotionButton = document.querySelector("#savePromotionButton");
 const promotionOutput = document.querySelector("#promotionOutput");
+const promotionSavedList = document.querySelector("#promotionSavedList");
 const promotionStatus = document.querySelector("#promotionStatus");
 const backToMainButton = document.querySelector("#backToMainButton");
 const output = document.querySelector("#customerCopyText") || document.querySelector("#output");
@@ -137,6 +153,8 @@ const phoneConsultationStorageKey = "insurancePhoneConsultationMemos";
 const phoneConsultationCommonTemplateStorageKey = "insurancePhoneConsultationCommonTemplate";
 const phoneConsultationDraftStorageKey = "insurancePhoneConsultationDrafts";
 const phoneConsultationOrderStorageKey = "insurancePhoneConsultationOrders";
+const promotionPostsStorageKey = "insurancePromotionPosts";
+const promotionImageSignatureStorageKey = "insurancePromotionImageSignature";
 const deletedCustomersStorageKey = "insuranceDisclosureDeletedCustomers";
 const uiSessionStorageKey = "insuranceDisclosureUiSession";
 const customerManagerCollapsedStorageKey = "insuranceCustomerManagerCollapsed";
@@ -156,6 +174,7 @@ let authSettings = null;
 let selectedDesignManagerRow = null;
 let universeDisclosureText = "";
 let medicalAnalysisJson = null;
+let promotionImageObjectUrl = "";
 
 function safeOn(element, type, handler, options) {
   if (!element) {
@@ -258,6 +277,10 @@ function mergeDraftSnapshots(...drafts) {
       phoneConsultationCommonTemplate: latest?.phoneConsultationCommonTemplate ?? oldest?.phoneConsultationCommonTemplate ?? "",
       phoneConsultationDrafts: mergePhoneConsultationRecordMap(oldest?.phoneConsultationDrafts, latest?.phoneConsultationDrafts),
       phoneConsultationOrders: mergePhoneConsultationRecordMap(oldest?.phoneConsultationOrders, latest?.phoneConsultationOrders),
+      promotionPosts: mergePromotionPosts(
+        Array.isArray(oldest?.promotionPosts) ? oldest.promotionPosts : [],
+        Array.isArray(latest?.promotionPosts) ? latest.promotionPosts : [],
+      ),
       universeDisclosureText: latest?.universeDisclosureText || oldest?.universeDisclosureText || "",
       medicalAnalysisJson: latest?.medicalAnalysisJson ?? oldest?.medicalAnalysisJson ?? null,
       updatedAt: latest?.updatedAt || oldest?.updatedAt || new Date().toISOString(),
@@ -1250,6 +1273,15 @@ function persistPhoneConsultationCloudDataFromDraft(draft) {
     changed = true;
   }
 
+  if (Array.isArray(draft.promotionPosts)) {
+    const mergedPosts = mergePromotionPosts(getStoredPromotionPosts(), draft.promotionPosts);
+    if (mergedPosts.length) {
+      setStoredPromotionPosts(mergedPosts);
+      renderPromotionSavedList();
+      changed = true;
+    }
+  }
+
   return changed;
 }
 
@@ -1333,7 +1365,7 @@ function renderPhoneConsultationMemoButtons(selectedId = activePhoneConsultation
       deleteButton.className = "phone-consultation-memo-delete";
       deleteButton.dataset.memoDeleteId = memo.id;
       deleteButton.title = "저장된 메모 삭제";
-      deleteButton.textContent = "×";
+      deleteButton.textContent = "\u00d7";
 
       item.append(button, deleteButton);
       buttons.append(item);
@@ -1496,6 +1528,291 @@ function showPromotionStatus(message) {
   }, 2500);
 }
 
+function getStoredPromotionPosts() {
+  const posts = readJsonStorage(getScopedStorageKey(promotionPostsStorageKey), []);
+  return Array.isArray(posts) ? posts : [];
+}
+
+function setStoredPromotionPosts(posts) {
+  localStorage.setItem(getScopedStorageKey(promotionPostsStorageKey), JSON.stringify(Array.isArray(posts) ? posts : []));
+}
+
+function mergePromotionPosts(...postLists) {
+  const merged = new Map();
+  postLists.flat().filter(Boolean).forEach((post) => {
+    if (!post?.id) return;
+    const previous = merged.get(post.id);
+    const postTime = new Date(post.updatedAt || post.createdAt || 0).getTime();
+    const previousTime = new Date(previous?.updatedAt || previous?.createdAt || 0).getTime();
+    if (!previous || postTime >= previousTime) merged.set(post.id, post);
+  });
+  return [...merged.values()].sort((a, b) => new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0));
+}
+
+function getPromotionChannelLabel(value) {
+  return {
+    blog: "네이버블로그",
+    instagram: "인스타그램",
+    kin: "네이버 지식인",
+  }[value] || "홍보";
+}
+
+function renderPromotionSavedList() {
+  if (!promotionSavedList) return;
+  const posts = getStoredPromotionPosts();
+  promotionSavedList.innerHTML = "";
+
+  if (!posts.length) {
+    const empty = document.createElement("p");
+    empty.className = "promotion-saved-empty";
+    empty.textContent = "저장된 홍보글이 없습니다.";
+    promotionSavedList.append(empty);
+    return;
+  }
+
+  posts.slice(0, 80).forEach((post) => {
+    const row = document.createElement("div");
+    row.className = "promotion-saved-row";
+
+    const loadButton = document.createElement("button");
+    loadButton.type = "button";
+    loadButton.className = "promotion-saved-load";
+    loadButton.dataset.promotionLoadId = post.id;
+    const savedDate = post.updatedAt ? new Date(post.updatedAt).toLocaleString("ko-KR") : "";
+    loadButton.textContent = [post.topic || "제목 없음", getPromotionChannelLabel(post.channel), savedDate].filter(Boolean).join(" / ");
+
+    const copyButton = document.createElement("button");
+    copyButton.type = "button";
+    copyButton.className = "promotion-saved-copy";
+    copyButton.dataset.promotionCopyId = post.id;
+    copyButton.textContent = "복사";
+
+    const deleteButton = document.createElement("button");
+    deleteButton.type = "button";
+    deleteButton.className = "promotion-saved-delete";
+    deleteButton.dataset.promotionDeleteId = post.id;
+    deleteButton.textContent = "×";
+    deleteButton.title = "저장된 홍보글 삭제";
+
+    row.append(loadButton, copyButton, deleteButton);
+    promotionSavedList.append(row);
+  });
+}
+
+function savePromotionPost() {
+  const content = promotionOutput?.value.trim() || "";
+  if (!content) {
+    showPromotionStatus("저장할 홍보글이 없습니다.");
+    return;
+  }
+
+  const now = new Date().toISOString();
+  const posts = getStoredPromotionPosts();
+  const post = {
+    id: `promotion-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    channel: promotionChannelInput?.value || "blog",
+    tone: promotionToneInput?.value || "cute",
+    length: promotionLengthInput?.value || "1",
+    topic: promotionTopicInput?.value.trim() || getPromotionImageHint() || "홍보글",
+    comment: promotionCommentInput?.value || "",
+    memo: promotionMemoInput?.value || "",
+    content,
+    imageName: promotionImageInput?.files?.[0]?.name || "",
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  setStoredPromotionPosts([post, ...posts]);
+  renderPromotionSavedList();
+  scheduleCloudSync();
+  showPromotionStatus("홍보글을 저장했습니다.");
+}
+
+function loadPromotionPost(id) {
+  const post = getStoredPromotionPosts().find((item) => item.id === id);
+  if (!post) {
+    showPromotionStatus("저장된 홍보글을 찾지 못했습니다.");
+    return;
+  }
+  if (promotionChannelInput) promotionChannelInput.value = post.channel || "blog";
+  if (promotionToneInput) promotionToneInput.value = post.tone || "cute";
+  if (promotionLengthInput) promotionLengthInput.value = post.length || "1";
+  if (promotionTopicInput) promotionTopicInput.value = post.topic || "";
+  if (promotionCommentInput) promotionCommentInput.value = post.comment || "";
+  if (promotionMemoInput) promotionMemoInput.value = post.memo || "";
+  if (promotionOutput) promotionOutput.value = post.content || "";
+  showPromotionStatus("저장된 홍보글을 불러왔습니다.");
+}
+
+function copyPromotionPost(id) {
+  const post = getStoredPromotionPosts().find((item) => item.id === id);
+  if (!post?.content) {
+    showPromotionStatus("복사할 홍보글을 찾지 못했습니다.");
+    return;
+  }
+  copyText(post.content, "저장된 홍보글 복사 완료");
+}
+
+function deletePromotionPost(id) {
+  const posts = getStoredPromotionPosts();
+  const post = posts.find((item) => item.id === id);
+  if (!post) return;
+  if (!confirm(`"${post.topic || "제목 없음"}" 홍보글을 삭제할까요?`)) return;
+  setStoredPromotionPosts(posts.filter((item) => item.id !== id));
+  renderPromotionSavedList();
+  scheduleCloudSync();
+  showPromotionStatus("저장된 홍보글을 삭제했습니다.");
+}
+
+function getStoredPromotionImageSignature() {
+  const signature = readJsonStorage(promotionImageSignatureStorageKey, {});
+  return signature && typeof signature === "object" ? signature : {};
+}
+
+function savePromotionImageSignature() {
+  localStorage.setItem(promotionImageSignatureStorageKey, JSON.stringify({
+    name: promotionImageNameInput?.value || "",
+    phone: promotionImagePhoneInput?.value || "",
+  }));
+}
+
+function restorePromotionImageSignature() {
+  const signature = getStoredPromotionImageSignature();
+  if (promotionImageNameInput) promotionImageNameInput.value = signature.name || "";
+  if (promotionImagePhoneInput) promotionImagePhoneInput.value = signature.phone || "";
+}
+
+function clearPromotionImageOutput() {
+  if (promotionCropCanvas) promotionCropCanvas.hidden = true;
+  if (downloadPromotionImageButton) downloadPromotionImageButton.disabled = true;
+}
+
+function handlePromotionImageSelected() {
+  const file = promotionImageInput?.files?.[0];
+  clearPromotionImageOutput();
+  if (promotionImageObjectUrl) URL.revokeObjectURL(promotionImageObjectUrl);
+  promotionImageObjectUrl = "";
+
+  if (!file || !promotionImagePreview) {
+    if (promotionImagePreview) {
+      promotionImagePreview.hidden = true;
+      promotionImagePreview.removeAttribute("src");
+    }
+    return;
+  }
+
+  promotionImageObjectUrl = URL.createObjectURL(file);
+  promotionImagePreview.src = promotionImageObjectUrl;
+  promotionImagePreview.hidden = false;
+  showPromotionStatus("이미지를 불러왔습니다. 크롭 또는 이름/연락처 넣기를 눌러주세요.");
+}
+
+function getPromotionCropRatio() {
+  const value = promotionCropAspectInput?.value || "original";
+  if (value === "original") return null;
+  const [width, height] = value.split(":").map(Number);
+  return width && height ? width / height : null;
+}
+
+function drawPromotionImageToCanvas({ stamp = false } = {}) {
+  if (!promotionImagePreview?.src || !promotionCropCanvas) {
+    showPromotionStatus("먼저 이미지를 올려주세요.");
+    return false;
+  }
+
+  const image = promotionImagePreview;
+  const sourceWidth = image.naturalWidth;
+  const sourceHeight = image.naturalHeight;
+  if (!sourceWidth || !sourceHeight) {
+    showPromotionStatus("이미지를 아직 불러오는 중입니다.");
+    return false;
+  }
+
+  const ratio = getPromotionCropRatio();
+  let sx = 0;
+  let sy = 0;
+  let sw = sourceWidth;
+  let sh = sourceHeight;
+  if (ratio) {
+    const sourceRatio = sourceWidth / sourceHeight;
+    if (sourceRatio > ratio) {
+      sw = Math.round(sourceHeight * ratio);
+      sx = Math.round((sourceWidth - sw) / 2);
+    } else {
+      sh = Math.round(sourceWidth / ratio);
+      sy = Math.round((sourceHeight - sh) / 2);
+    }
+  }
+
+  const maxWidth = 1200;
+  const scale = Math.min(1, maxWidth / sw);
+  const canvasWidth = Math.round(sw * scale);
+  const canvasHeight = Math.round(sh * scale);
+  promotionCropCanvas.width = canvasWidth;
+  promotionCropCanvas.height = canvasHeight;
+
+  const context = promotionCropCanvas.getContext("2d");
+  context.clearRect(0, 0, canvasWidth, canvasHeight);
+  context.drawImage(image, sx, sy, sw, sh, 0, 0, canvasWidth, canvasHeight);
+
+  if (stamp) {
+    savePromotionImageSignature();
+    const name = promotionImageNameInput?.value.trim() || "";
+    const phone = promotionImagePhoneInput?.value.trim() || "";
+    const lines = [name, phone].filter(Boolean);
+    if (lines.length) {
+      const padding = Math.max(18, Math.round(canvasWidth * 0.025));
+      const fontSize = Math.max(24, Math.round(canvasWidth * 0.042));
+      const lineHeight = Math.round(fontSize * 1.25);
+      const boxWidth = Math.min(canvasWidth - padding * 2, Math.round(canvasWidth * 0.62));
+      const boxHeight = padding + lines.length * lineHeight;
+      const boxX = canvasWidth - boxWidth - padding;
+      const boxY = canvasHeight - boxHeight - padding;
+
+      context.fillStyle = "rgba(0, 0, 0, 0.58)";
+      context.fillRect(boxX, boxY, boxWidth, boxHeight);
+      context.fillStyle = "#ffffff";
+      context.font = `700 ${fontSize}px sans-serif`;
+      context.textBaseline = "middle";
+      lines.forEach((line, index) => {
+        context.fillText(line, boxX + padding, boxY + padding + lineHeight * index + lineHeight / 2, boxWidth - padding * 2);
+      });
+    }
+  }
+
+  promotionCropCanvas.hidden = false;
+  if (downloadPromotionImageButton) downloadPromotionImageButton.disabled = false;
+  showPromotionStatus(stamp ? "이름/연락처를 이미지에 넣었습니다." : "이미지를 크롭했습니다.");
+  return true;
+}
+
+function downloadPromotionImage() {
+  if (!promotionCropCanvas || promotionCropCanvas.hidden) {
+    showPromotionStatus("먼저 이미지를 크롭하거나 이름/연락처를 넣어주세요.");
+    return;
+  }
+  const link = document.createElement("a");
+  link.href = promotionCropCanvas.toDataURL("image/png");
+  link.download = `promotion-image-${Date.now()}.png`;
+  document.body.append(link);
+  link.click();
+  link.remove();
+}
+
+function openPromotionSearch(site) {
+  const query = promotionSearchInput?.value.trim() || promotionTopicInput?.value.trim() || "";
+  if (!query) {
+    showPromotionStatus("검색어를 입력해주세요.");
+    promotionSearchInput?.focus();
+    return;
+  }
+  const encoded = encodeURIComponent(query);
+  const url = site === "pinterest"
+    ? `https://www.pinterest.com/search/pins/?q=${encoded}`
+    : `https://search.naver.com/search.naver?query=${encoded}`;
+  window.open(url, "_blank", "noopener,noreferrer");
+}
+
 function getPromotionImageHint() {
   const file = promotionImageInput?.files?.[0];
   if (!file) return "";
@@ -1540,7 +1857,7 @@ function getPromotionConsultationReference() {
     : "";
 }
 
-function buildPromotionCopy() {
+function buildPromotionCopyLegacy() {
   const channel = promotionChannelInput?.value || "blog";
   const topic = promotionTopicInput?.value.trim() || getPromotionImageHint() || "보험 점검";
   const memo = promotionMemoInput?.value.trim();
@@ -1615,6 +1932,117 @@ function buildPromotionCopy() {
   ].filter(Boolean).join("\n");
 }
 
+function getPromotionToneConfig() {
+  const tone = promotionToneInput?.value || "cute";
+  return {
+    cute: {
+      label: "귀엽게 😊",
+      intro: "살짝 귀엽고 편하게 알려드릴게요 😊",
+      closing: "궁금하시면 편하게 톡 남겨주세요. 제가 차근차근 같이 봐드릴게요 🫶",
+      emoji: "✨",
+    },
+    feminine: {
+      label: "여성스럽게 🌷",
+      intro: "부드럽고 차분하게 꼭 필요한 부분만 정리해드릴게요 🌷",
+      closing: "필요하신 분은 편하게 문의 주세요. 상황에 맞춰 꼼꼼히 확인해드릴게요 🤍",
+      emoji: "🌿",
+    },
+    expert: {
+      label: "전문가스럽게 📌",
+      intro: "전문가 관점에서 핵심만 정확히 짚어드리겠습니다 📌",
+      closing: "가입증권과 약관 기준으로 확인해야 정확합니다. 필요한 부분은 상담으로 점검해드리겠습니다.",
+      emoji: "✅",
+    },
+  }[tone] || {
+    label: "귀엽게 😊",
+    intro: "살짝 귀엽고 편하게 알려드릴게요 😊",
+    closing: "궁금하시면 편하게 톡 남겨주세요. 제가 차근차근 같이 봐드릴게요 🫶",
+    emoji: "✨",
+  };
+}
+
+function getPromotionLengthBlocks(topic, multiplier, toneConfig) {
+  const blocks = [
+    `${toneConfig.emoji} 보험은 가입해두었다고 끝나는 것이 아니라, 시간이 지나면서 내 상황에 맞게 다시 점검해보는 과정이 필요합니다.`,
+    `${toneConfig.emoji} 특히 ${topic}처럼 실제 청구나 보장 확인과 연결되는 내용은 생각보다 놓치기 쉬워요.`,
+    `${toneConfig.emoji} 가입증권, 최근 병원 이력, 청구 가능 항목을 같이 보면 받을 수 있는 부분과 부족한 부분이 훨씬 선명하게 보입니다.`,
+  ];
+  if (multiplier >= 2) {
+    blocks.push(`${toneConfig.emoji} 보험료는 매달 나가는데 정작 필요한 보장이 약하거나, 반대로 중복된 특약 때문에 부담만 커진 경우도 많습니다.`);
+    blocks.push(`${toneConfig.emoji} 그래서 새로 가입하기 전에 지금 가진 보장이 어떤 역할을 하는지 먼저 확인하는 것이 중요합니다.`);
+  }
+  if (multiplier >= 3) {
+    blocks.push(`${toneConfig.emoji} 진단비, 수술비, 입원비, 실손, 후유장해처럼 항목별로 나눠서 보면 막연했던 보험 내용이 훨씬 쉽게 정리됩니다.`);
+    blocks.push(`${toneConfig.emoji} 현재 나이, 병력, 가족력, 보험료 부담까지 함께 보고 균형을 맞추는 것이 좋습니다.`);
+    blocks.push(`${toneConfig.emoji} 작은 점검 하나가 나중에 보험금 청구나 치료비 준비에서 큰 차이를 만들 수 있습니다.`);
+  }
+  return blocks;
+}
+
+function buildPromotionVariant({ variant, topic, channel, comment, memoLine, imageLine, consultationLine, toneConfig, multiplier }) {
+  const channelGuide = {
+    blog: "블로그용",
+    instagram: "인스타그램용",
+    kin: "지식인 답변용",
+  }[channel] || "홍보용";
+  const title = variant === 1
+    ? `[1안] ${topic}, 지금 한 번 확인해보세요`
+    : `[2안] 혹시 ${topic} 놓치고 계신가요?`;
+  const hook = variant === 1
+    ? `${toneConfig.intro}\n\n${topic}은 막상 필요할 때 확인하려면 헷갈리는 경우가 많습니다.`
+    : `${topic}, 그냥 지나치기엔 아까운 부분이 있을 수 있어요. ${toneConfig.intro}`;
+  const body = getPromotionLengthBlocks(topic, multiplier, toneConfig);
+  const checklist = [
+    "",
+    "체크해보면 좋은 부분",
+    "- 받을 수 있는데 놓친 보험금은 없는지",
+    "- 진단비와 수술비가 현재 기준에 부족하지 않은지",
+    "- 보험료 대비 꼭 필요한 보장이 남아있는지",
+    "- 예전에 가입한 보험이 지금 상황에도 맞는지",
+  ];
+  const channelTail = channel === "instagram"
+    ? "\n\n#보험점검 #숨은보험금 #보험상담 #진단비 #실손보험 #보험청구"
+    : channel === "kin"
+      ? "\n\n정확한 판단은 가입증권, 약관, 병원 서류를 함께 보고 확인하는 것이 가장 안전합니다."
+      : "";
+  const commentLine = comment ? `\n\n댓글 예시: ${comment}` : "";
+
+  return [
+    `${title} (${channelGuide} / ${toneConfig.label})`,
+    "",
+    hook,
+    "",
+    ...body,
+    ...checklist,
+    "",
+    toneConfig.closing,
+    consultationLine,
+    memoLine,
+    imageLine,
+    commentLine,
+    channelTail,
+  ].filter(Boolean).join("\n");
+}
+
+function buildPromotionCopy() {
+  const channel = promotionChannelInput?.value || "blog";
+  const topic = promotionTopicInput?.value.trim() || getPromotionImageHint() || "보험 점검";
+  const memo = promotionMemoInput?.value.trim();
+  const comment = promotionCommentInput?.value.trim();
+  const imageHint = getPromotionImageHint();
+  const memoLine = memo ? `\n\n추가 포인트: ${memo}` : "";
+  const imageLine = imageHint ? `\n이미지 참고 키워드: ${imageHint}` : "";
+  const consultationLine = getPromotionConsultationReference();
+  const toneConfig = getPromotionToneConfig();
+  const multiplier = Math.max(1, Math.min(3, Number(promotionLengthInput?.value || 1)));
+
+  return [
+    buildPromotionVariant({ variant: 1, topic, channel, comment, memoLine, imageLine, consultationLine, toneConfig, multiplier }),
+    "\n\n────────────────────\n",
+    buildPromotionVariant({ variant: 2, topic, channel, comment, memoLine, imageLine, consultationLine, toneConfig, multiplier }),
+  ].join("");
+}
+
 function generatePromotionCopy() {
   if (!promotionOutput) return;
   promotionOutput.value = buildPromotionCopy();
@@ -1660,6 +2088,8 @@ function setPromotionMode(enabled, updateHash = true) {
   document.body.classList.toggle("promotion-mode", enabled);
   if (enabled) {
     document.body.classList.remove("contract-management-mode", "design-manager-mode", "phone-consultation-mode");
+    restorePromotionImageSignature();
+    renderPromotionSavedList();
   }
   if (pageTitle) pageTitle.textContent = getMainPageTitle();
   if (updateHash) {
@@ -2087,6 +2517,8 @@ async function pushCloudSnapshot() {
   const phoneTemplate = getStoredPhoneConsultationCommonTemplate();
   const phoneDrafts = getStoredPhoneConsultationDrafts();
   const phoneOrders = getStoredPhoneConsultationOrders();
+  const latestPromotionPosts = Array.isArray(latestCloudRow?.draft?.promotionPosts) ? latestCloudRow.draft.promotionPosts : [];
+  const promotionPosts = mergePromotionPosts(latestPromotionPosts, getStoredPromotionPosts());
 
   console.info("[sync] 저장 직전 서버 최신 customers 개수", latestCloudCustomers.length);
   console.info("[sync] 저장 직전 로컬 캐시 customers 개수", localCustomers.length);
@@ -2108,6 +2540,7 @@ async function pushCloudSnapshot() {
       phoneConsultationCommonTemplate: phoneTemplate,
       phoneConsultationDrafts: phoneDrafts,
       phoneConsultationOrders: phoneOrders,
+      promotionPosts,
       universeDisclosureText,
       medicalAnalysisJson,
     },
@@ -2120,6 +2553,7 @@ async function pushCloudSnapshot() {
     phoneConsultationCommonTemplate: phoneTemplate,
     phoneConsultationDrafts: phoneDrafts,
     phoneConsultationOrders: phoneOrders,
+    promotionPosts,
     universeDisclosureText,
     medicalAnalysisJson,
   };
@@ -5891,6 +6325,7 @@ function saveAutoDraft(state = collectCustomerState()) {
       phoneConsultationCommonTemplate: getStoredPhoneConsultationCommonTemplate(),
       phoneConsultationDrafts: getStoredPhoneConsultationDrafts(),
       phoneConsultationOrders: getStoredPhoneConsultationOrders(),
+      promotionPosts: getStoredPromotionPosts(),
       universeDisclosureText,
       medicalAnalysisJson,
     }),
@@ -6564,6 +6999,31 @@ function bindApplicationUiEvents() {
   safeOn(phoneConsultationCommonTemplateInput, "input", () => savePhoneConsultationDraftForCustomer());
   safeOn(generatePromotionButton, "click", generatePromotionCopy);
   safeOn(copyPromotionButton, "click", copyPromotionCopy);
+  safeOn(savePromotionButton, "click", savePromotionPost);
+  safeOn(promotionImageInput, "change", handlePromotionImageSelected);
+  safeOn(cropPromotionImageButton, "click", () => drawPromotionImageToCanvas({ stamp: false }));
+  safeOn(stampPromotionImageButton, "click", () => drawPromotionImageToCanvas({ stamp: true }));
+  safeOn(downloadPromotionImageButton, "click", downloadPromotionImage);
+  safeOn(promotionImageNameInput, "input", savePromotionImageSignature);
+  safeOn(promotionImagePhoneInput, "input", savePromotionImageSignature);
+  safeOn(promotionNaverSearchButton, "click", () => openPromotionSearch("naver"));
+  safeOn(promotionPinterestSearchButton, "click", () => openPromotionSearch("pinterest"));
+  safeOn(promotionSavedList, "click", (event) => {
+    const deleteButton = event.target.closest("[data-promotion-delete-id]");
+    if (deleteButton) {
+      deletePromotionPost(deleteButton.dataset.promotionDeleteId);
+      return;
+    }
+    const copyButton = event.target.closest("[data-promotion-copy-id]");
+    if (copyButton) {
+      copyPromotionPost(copyButton.dataset.promotionCopyId);
+      return;
+    }
+    const loadButton = event.target.closest("[data-promotion-load-id]");
+    if (loadButton) {
+      loadPromotionPost(loadButton.dataset.promotionLoadId);
+    }
+  });
   safeOn(logoutButton, "click", logoutCustomerApp);
   safeOn(window, "online", scheduleCloudSync);
   safeOn(saveCustomerButton, "click", () => {
