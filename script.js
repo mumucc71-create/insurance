@@ -1144,14 +1144,22 @@ function capturePhoneConsultationHighlight() {
   }
 }
 
+function syncPhoneConsultationHighlightScroll() {
+  if (!phoneConsultationHighlightCanvas || !phoneConsultationMemoInput) return;
+  phoneConsultationHighlightCanvas.style.transform = `translateY(${-phoneConsultationMemoInput.scrollTop}px)`;
+}
+
 function sizePhoneConsultationHighlightCanvas(imageDataUrl = phoneConsultationHighlightImage) {
   if (!phoneConsultationHighlightCanvas || !phoneConsultationMemoCanvasWrap) return;
   const rect = phoneConsultationMemoCanvasWrap.getBoundingClientRect();
   if (!rect.width || !rect.height) return;
 
   const pixelRatio = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
+  const contentHeight = Math.max(rect.height, phoneConsultationMemoInput?.scrollHeight || 0);
   const width = Math.round(rect.width * pixelRatio);
-  const height = Math.round(rect.height * pixelRatio);
+  const height = Math.round(contentHeight * pixelRatio);
+  phoneConsultationHighlightCanvas.style.height = `${contentHeight}px`;
+  syncPhoneConsultationHighlightScroll();
   if (phoneConsultationHighlightCanvas.width === width && phoneConsultationHighlightCanvas.height === height) return;
 
   phoneConsultationHighlightCanvas.width = width;
@@ -1165,7 +1173,7 @@ function sizePhoneConsultationHighlightCanvas(imageDataUrl = phoneConsultationHi
   image.onload = () => {
     context.save();
     context.globalAlpha = 1;
-    context.drawImage(image, 0, 0, rect.width, rect.height);
+    context.drawImage(image, 0, 0, rect.width, contentHeight);
     context.restore();
     phoneConsultationHighlightImage = phoneConsultationHighlightCanvas.toDataURL("image/png");
   };
@@ -1178,12 +1186,13 @@ function restorePhoneConsultationHighlight(imageDataUrl = "") {
   const context = getPhoneConsultationHighlightContext();
   if (!context || !phoneConsultationHighlightCanvas) return;
   const rect = phoneConsultationMemoCanvasWrap.getBoundingClientRect();
-  context.clearRect(0, 0, rect.width, rect.height);
+  const contentHeight = Math.max(rect.height, phoneConsultationMemoInput?.scrollHeight || 0);
+  context.clearRect(0, 0, rect.width, contentHeight);
   if (!phoneConsultationHighlightImage) return;
 
   const image = new Image();
   image.onload = () => {
-    context.drawImage(image, 0, 0, rect.width, rect.height);
+    context.drawImage(image, 0, 0, rect.width, contentHeight);
   };
   image.src = phoneConsultationHighlightImage;
 }
@@ -1303,14 +1312,22 @@ function capturePhoneConsultationCommonHighlight() {
   }
 }
 
+function syncPhoneConsultationCommonHighlightScroll() {
+  if (!phoneConsultationCommonHighlightCanvas || !phoneConsultationCommonTemplateInput) return;
+  phoneConsultationCommonHighlightCanvas.style.transform = `translateY(${-phoneConsultationCommonTemplateInput.scrollTop}px)`;
+}
+
 function sizePhoneConsultationCommonHighlightCanvas(imageDataUrl = phoneConsultationCommonHighlightImage) {
   if (!phoneConsultationCommonHighlightCanvas || !phoneConsultationCommonCanvasWrap) return;
   const rect = phoneConsultationCommonCanvasWrap.getBoundingClientRect();
   if (!rect.width || !rect.height) return;
 
   const pixelRatio = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
+  const contentHeight = Math.max(rect.height, phoneConsultationCommonTemplateInput?.scrollHeight || 0);
   const width = Math.round(rect.width * pixelRatio);
-  const height = Math.round(rect.height * pixelRatio);
+  const height = Math.round(contentHeight * pixelRatio);
+  phoneConsultationCommonHighlightCanvas.style.height = `${contentHeight}px`;
+  syncPhoneConsultationCommonHighlightScroll();
   if (phoneConsultationCommonHighlightCanvas.width === width && phoneConsultationCommonHighlightCanvas.height === height) return;
 
   phoneConsultationCommonHighlightCanvas.width = width;
@@ -1322,7 +1339,7 @@ function sizePhoneConsultationCommonHighlightCanvas(imageDataUrl = phoneConsulta
   if (!imageDataUrl) return;
   const image = new Image();
   image.onload = () => {
-    context.drawImage(image, 0, 0, rect.width, rect.height);
+    context.drawImage(image, 0, 0, rect.width, contentHeight);
     phoneConsultationCommonHighlightImage = phoneConsultationCommonHighlightCanvas.toDataURL("image/png");
   };
   image.src = imageDataUrl;
@@ -1334,12 +1351,13 @@ function restorePhoneConsultationCommonHighlight(imageDataUrl = "") {
   const context = getPhoneConsultationCommonHighlightContext();
   if (!context || !phoneConsultationCommonHighlightCanvas || !phoneConsultationCommonCanvasWrap) return;
   const rect = phoneConsultationCommonCanvasWrap.getBoundingClientRect();
-  context.clearRect(0, 0, rect.width, rect.height);
+  const contentHeight = Math.max(rect.height, phoneConsultationCommonTemplateInput?.scrollHeight || 0);
+  context.clearRect(0, 0, rect.width, contentHeight);
   if (!phoneConsultationCommonHighlightImage) return;
 
   const image = new Image();
   image.onload = () => {
-    context.drawImage(image, 0, 0, rect.width, rect.height);
+    context.drawImage(image, 0, 0, rect.width, contentHeight);
   };
   image.src = phoneConsultationCommonHighlightImage;
 }
@@ -9280,6 +9298,12 @@ function bindApplicationUiEvents() {
   safeOn(phoneConsultationHighlightCanvas, "pointermove", continuePhoneConsultationHighlight);
   safeOn(phoneConsultationHighlightCanvas, "pointerup", finishPhoneConsultationHighlight);
   safeOn(phoneConsultationHighlightCanvas, "pointercancel", finishPhoneConsultationHighlight);
+  safeOn(phoneConsultationHighlightCanvas, "wheel", (event) => {
+    if (!phoneConsultationMemoInput) return;
+    phoneConsultationMemoInput.scrollTop += event.deltaY;
+    syncPhoneConsultationHighlightScroll();
+    event.preventDefault();
+  });
   safeOn(window, "resize", () => {
     window.clearTimeout(phoneConsultationHighlightResizeTimer);
     phoneConsultationHighlightResizeTimer = window.setTimeout(() => {
@@ -9318,6 +9342,12 @@ function bindApplicationUiEvents() {
   safeOn(phoneConsultationCommonHighlightCanvas, "pointermove", continuePhoneConsultationCommonHighlight);
   safeOn(phoneConsultationCommonHighlightCanvas, "pointerup", finishPhoneConsultationCommonHighlight);
   safeOn(phoneConsultationCommonHighlightCanvas, "pointercancel", finishPhoneConsultationCommonHighlight);
+  safeOn(phoneConsultationCommonHighlightCanvas, "wheel", (event) => {
+    if (!phoneConsultationCommonTemplateInput) return;
+    phoneConsultationCommonTemplateInput.scrollTop += event.deltaY;
+    syncPhoneConsultationCommonHighlightScroll();
+    event.preventDefault();
+  });
   if (window.ResizeObserver && phoneConsultationCommonCanvasWrap) {
     const commonHighlightResizeObserver = new ResizeObserver(() => {
       window.clearTimeout(phoneConsultationCommonHighlightResizeTimer);
@@ -9329,10 +9359,18 @@ function bindApplicationUiEvents() {
     commonHighlightResizeObserver.observe(phoneConsultationCommonCanvasWrap);
   }
   safeOn(phoneConsultationTitleInput, "input", () => savePhoneConsultationDraftForCustomer());
-  safeOn(phoneConsultationMemoInput, "input", () => savePhoneConsultationDraftForCustomer());
+  safeOn(phoneConsultationMemoInput, "scroll", syncPhoneConsultationHighlightScroll);
+  safeOn(phoneConsultationMemoInput, "input", () => {
+    const currentImage = capturePhoneConsultationHighlight() || phoneConsultationHighlightImage;
+    sizePhoneConsultationHighlightCanvas(currentImage);
+    savePhoneConsultationDraftForCustomer();
+  });
+  safeOn(phoneConsultationCommonTemplateInput, "scroll", syncPhoneConsultationCommonHighlightScroll);
   safeOn(phoneConsultationCommonTemplateInput, "input", () => {
     viewedPhoneConsultationMemoId = "";
     phoneConsultationMemoList?.querySelectorAll(".is-selected").forEach((button) => button.classList.remove("is-selected"));
+    const currentImage = capturePhoneConsultationCommonHighlight() || phoneConsultationCommonHighlightImage;
+    sizePhoneConsultationCommonHighlightCanvas(currentImage);
     savePhoneConsultationDraftForCustomer();
   });
   safeOn(generatePromotionButton, "click", generatePromotionCopy);
