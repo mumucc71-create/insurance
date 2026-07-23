@@ -5150,14 +5150,19 @@ function mergeCustomers(...customerLists) {
 }
 
 function getDesignManagerMergeKey(manager, index) {
-  return [
+  const stableParts = [
+    manager?.type,
     manager?.company,
     manager?.name,
+    manager?.managerPhone,
+    manager?.admin,
+    manager?.adminPhone,
     manager?.siteUrl,
+    manager?.browser,
     manager?.loginId,
     manager?.password,
-    index,
-  ].filter(Boolean).join("|");
+  ].map((value) => String(value ?? "").trim());
+  return stableParts.some(Boolean) ? stableParts.join("|") : `empty-manager-${index}`;
 }
 
 function mergeDesignManagers(...managerLists) {
