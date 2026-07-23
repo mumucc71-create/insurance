@@ -274,8 +274,18 @@ function preserveScrollPosition(callback) {
   const left = window.scrollX;
   const top = window.scrollY;
   const result = callback?.();
-  requestAnimationFrame(() => window.scrollTo(left, top));
+  restoreScrollPosition(left, top);
   return result;
+}
+
+function restoreScrollPosition(left, top) {
+  window.scrollTo(left, top);
+  requestAnimationFrame(() => {
+    window.scrollTo(left, top);
+    requestAnimationFrame(() => window.scrollTo(left, top));
+  });
+  window.setTimeout(() => window.scrollTo(left, top), 30);
+  window.setTimeout(() => window.scrollTo(left, top), 120);
 }
 
 function focusWithoutPageJump(element) {
@@ -286,7 +296,7 @@ function focusWithoutPageJump(element) {
     element.focus({ preventScroll: true });
   } catch {
     element.focus();
-    window.scrollTo(left, top);
+    restoreScrollPosition(left, top);
   }
 }
 
@@ -1254,7 +1264,7 @@ function savePhoneConsultationCommonTemplate() {
   showPhoneConsultationStatus("공통 양식은 저장했지만 메모 버튼 저장에 실패했습니다.");
 }
 
-function appendPhoneConsultationMemoContent(content, message = "내용을 메모칸 아래에 추가했습니다.") {
+function appendPhoneConsultationMemoContent(content, message = "내용을 메모칸 아래에 추가했습니다.", options = {}) {
   const template = String(content ?? "").trim();
   if (!template || !phoneConsultationMemoInput) {
     showPhoneConsultationStatus("추가할 내용이 없습니다.");
@@ -1264,9 +1274,11 @@ function appendPhoneConsultationMemoContent(content, message = "내용을 메모
   phoneConsultationMemoInput.value = current.trim()
     ? `${current.replace(/\s+$/, "")}\n\n${template}`
     : template;
-  focusWithoutPageJump(phoneConsultationMemoInput);
-  phoneConsultationMemoInput.selectionStart = phoneConsultationMemoInput.value.length;
-  phoneConsultationMemoInput.selectionEnd = phoneConsultationMemoInput.value.length;
+  if (options.focusMemo) {
+    focusWithoutPageJump(phoneConsultationMemoInput);
+    phoneConsultationMemoInput.selectionStart = phoneConsultationMemoInput.value.length;
+    phoneConsultationMemoInput.selectionEnd = phoneConsultationMemoInput.value.length;
+  }
   savePhoneConsultationDraftForCustomer();
   showPhoneConsultationStatus(message);
 }
