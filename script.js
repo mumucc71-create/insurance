@@ -215,10 +215,12 @@ const customerStorageKey = "insuranceDisclosureCustomers";
 const autoSaveDraftKey = "insuranceDisclosureAutoSaveDraft";
 const localAccountStorageKey = "insuranceDisclosureLocalAccounts";
 const cloudSessionStorageKey = "insuranceDisclosureCloudSession";
+const cloudSessionBackupStorageKey = "insuranceDisclosureCloudSessionBackup";
 const localSessionStorageKey = "insuranceDisclosureLocalSession";
 const designManagerStorageKey = "insuranceDesignManagers";
 const phoneConsultationStorageKey = "insurancePhoneConsultationMemos";
 const phoneConsultationCommonTemplateStorageKey = "insurancePhoneConsultationCommonTemplate";
+const phoneConsultationCommonTemplateUpdatedAtStorageKey = "insurancePhoneConsultationCommonTemplateUpdatedAt";
 const phoneConsultationCommonTemplateHighlightStorageKey = "insurancePhoneConsultationCommonTemplateHighlight";
 const phoneConsultationCommonTemplateHighlightStrokesStorageKey = "insurancePhoneConsultationCommonTemplateHighlightStrokes";
 const phoneConsultationDraftStorageKey = "insurancePhoneConsultationDrafts";
@@ -404,6 +406,43 @@ function setCheckedValues(name, values = []) {
   });
 }
 
+function pickLatestCommonTemplate(left, right) {
+  const leftHasTimestamp = Boolean(left?.phoneConsultationCommonTemplateUpdatedAt);
+  const rightHasTimestamp = Boolean(right?.phoneConsultationCommonTemplateUpdatedAt);
+  const leftTime = new Date(
+    left?.phoneConsultationCommonTemplateUpdatedAt
+    || (left?.phoneConsultationCommonTemplate ? left?.updatedAt : 0)
+    || 0,
+  ).getTime();
+  const rightTime = new Date(
+    right?.phoneConsultationCommonTemplateUpdatedAt
+    || (right?.phoneConsultationCommonTemplate ? right?.updatedAt : 0)
+    || 0,
+  ).getTime();
+  const selected = rightTime >= leftTime ? right : left;
+  const fallback = selected === right ? left : right;
+  const hasExplicitTimestamp = selected === right ? rightHasTimestamp : leftHasTimestamp;
+  return {
+    content: hasExplicitTimestamp
+      ? String(selected?.phoneConsultationCommonTemplate ?? "")
+      : String(selected?.phoneConsultationCommonTemplate || fallback?.phoneConsultationCommonTemplate || ""),
+    highlight: hasExplicitTimestamp
+      ? String(selected?.phoneConsultationCommonHighlight || "")
+      : String(selected?.phoneConsultationCommonHighlight || fallback?.phoneConsultationCommonHighlight || ""),
+    strokes: hasExplicitTimestamp
+      ? (Array.isArray(selected?.phoneConsultationCommonHighlightStrokes)
+        ? selected.phoneConsultationCommonHighlightStrokes
+        : [])
+      : ((Array.isArray(selected?.phoneConsultationCommonHighlightStrokes)
+        && selected.phoneConsultationCommonHighlightStrokes.length
+        ? selected.phoneConsultationCommonHighlightStrokes
+        : fallback?.phoneConsultationCommonHighlightStrokes) || []),
+    updatedAt: selected?.phoneConsultationCommonTemplateUpdatedAt
+      || fallback?.phoneConsultationCommonTemplateUpdatedAt
+      || "",
+  };
+}
+
 function mergeDraftSnapshots(...drafts) {
   const validDrafts = drafts.filter((draft) => draft && typeof draft === "object");
   if (!validDrafts.length) return null;
@@ -413,6 +452,7 @@ function mergeDraftSnapshots(...drafts) {
     const draftTime = new Date(draft?.updatedAt || 0).getTime();
     const latest = draftTime >= mergedTime ? draft : merged;
     const oldest = draftTime >= mergedTime ? merged : draft;
+    const commonTemplate = pickLatestCommonTemplate(oldest, latest);
     return {
       ...(oldest || {}),
       ...(latest || {}),
@@ -426,20 +466,10 @@ function mergeDraftSnapshots(...drafts) {
         Array.isArray(oldest?.phoneConsultationMemos) ? oldest.phoneConsultationMemos : [],
         Array.isArray(latest?.phoneConsultationMemos) ? latest.phoneConsultationMemos : [],
       ),
-      phoneConsultationCommonTemplate:
-        latest?.phoneConsultationCommonTemplate
-        || oldest?.phoneConsultationCommonTemplate
-        || "",
-      phoneConsultationCommonHighlight:
-        latest?.phoneConsultationCommonHighlight
-        || oldest?.phoneConsultationCommonHighlight
-        || "",
-      phoneConsultationCommonHighlightStrokes:
-        (Array.isArray(latest?.phoneConsultationCommonHighlightStrokes)
-          && latest.phoneConsultationCommonHighlightStrokes.length
-          ? latest.phoneConsultationCommonHighlightStrokes
-          : oldest?.phoneConsultationCommonHighlightStrokes)
-        || [],
+      phoneConsultationCommonTemplate: commonTemplate.content,
+      phoneConsultationCommonTemplateUpdatedAt: commonTemplate.updatedAt,
+      phoneConsultationCommonHighlight: commonTemplate.highlight,
+      phoneConsultationCommonHighlightStrokes: commonTemplate.strokes,
       phoneConsultationDrafts: mergePhoneConsultationRecordMap(oldest?.phoneConsultationDrafts, latest?.phoneConsultationDrafts),
       phoneConsultationOrders: mergePhoneConsultationRecordMap(oldest?.phoneConsultationOrders, latest?.phoneConsultationOrders),
       promotionPosts: mergePromotionPosts(
@@ -595,7 +625,7 @@ async function restoreCloudAuthSession(savedSession) {
 }
 
 async function restoreSavedAuthSession() {
-  const savedCloudSession = readJsonStorage(cloudSessionStorageKey);
+  const savedCloudSession = readSavedCloudSession();
   if (savedCloudSession?.user?.id && savedCloudSession.access_token) {
     const restored = await restoreCloudAuthSession(savedCloudSession);
     if (restored) return true;
@@ -631,8 +661,8 @@ function restoreCustomersToUi() {
 
   savedCustomerSelect.value = selectedCustomer.id;
   applyCustomerState(selectedCustomer.state);
-  if (recovery.recoveredCustomerCount > 0) {
-    showManagerStatus(`이전 저장 고객 ${recovery.recoveredCustomerCount}명을 복구했습니다.`);
+  if (recovery.recoveredCustomerCount > 0 || recovery.recoveredMemoCount > 0) {
+    showManagerStatus(`이전 저장 고객 ${recovery.recoveredCustomerCount}명, 메모 ${recovery.recoveredMemoCount}건을 복구했습니다.`);
   } else {
     showManagerStatus(`${customers.length}명의 저장 고객을 불러왔습니다.`);
   }
@@ -656,7 +686,12 @@ function recoverStoredCustomersManually() {
   }
 
   const sourceText = recovery.sources.length ? `\n\n복구 위치:\n- ${recovery.sources.join("\n- ")}` : "";
-  alert(`저장 고객 ${recovery.customers.length}명을 불러왔습니다.${recovery.recoveredCustomerCount ? `\n이전 데이터 ${recovery.recoveredCustomerCount}명을 새로 합쳤습니다.` : ""}${sourceText}`);
+  alert(
+    `저장 고객 ${recovery.customers.length}명, 메모 ${recovery.phoneMemos.length}건을 불러왔습니다.`
+    + `${recovery.recoveredCustomerCount || recovery.recoveredMemoCount
+      ? `\n이전 데이터에서 고객 ${recovery.recoveredCustomerCount}명, 메모 ${recovery.recoveredMemoCount}건을 새로 합쳤습니다.`
+      : ""}${sourceText}`,
+  );
 }
 
 function persistDraftSnapshot(draft) {
@@ -773,8 +808,11 @@ async function flushCloudSyncNow(reason = "수동 저장") {
 
 async function syncAllCloudData() {
   if (localMode || isLocalAuthSession(currentSession)) {
-    setSyncStatus("이 기기 저장 모드 - 클라우드 동기화 불가");
-    showManagerStatus("현재 로그인은 이 기기 저장 모드입니다. 로그아웃 후 클라우드 계정으로 로그인해주세요.");
+    runAutoSave();
+    fillAuthFieldsFromSession(currentSession);
+    saveLocalSession(null);
+    setSyncStatus("클라우드 로그인 필요");
+    showAuthScreen("Chrome 동기화를 시작하려면 현재 이름과 보안용 연락처로 클라우드 로그인해주세요. 기존 로컬 자료는 그대로 보존됩니다.");
     return;
   }
   if (!supabaseClient || !currentSession?.access_token) {
@@ -1018,9 +1056,35 @@ function normalizeSupabaseSession(data) {
 
 function saveCloudSession(session) {
   if (session) {
-    localStorage.setItem(cloudSessionStorageKey, JSON.stringify(session));
+    const serialized = JSON.stringify(session);
+    try {
+      localStorage.setItem(cloudSessionStorageKey, serialized);
+    } catch (error) {
+      console.warn("[auth] local cloud session save failed", error);
+    }
+    try {
+      sessionStorage.setItem(cloudSessionBackupStorageKey, serialized);
+    } catch (error) {
+      console.warn("[auth] session backup save failed", error);
+    }
   } else {
-    localStorage.removeItem(cloudSessionStorageKey);
+    try {
+      localStorage.removeItem(cloudSessionStorageKey);
+      sessionStorage.removeItem(cloudSessionBackupStorageKey);
+    } catch (error) {
+      console.warn("[auth] cloud session clear failed", error);
+    }
+  }
+}
+
+function readSavedCloudSession() {
+  const localSession = readJsonStorage(cloudSessionStorageKey);
+  if (localSession?.user?.id && localSession.access_token) return localSession;
+  try {
+    const backup = JSON.parse(sessionStorage.getItem(cloudSessionBackupStorageKey) || "null");
+    return backup?.user?.id && backup.access_token ? backup : null;
+  } catch {
+    return null;
   }
 }
 
@@ -1154,8 +1218,26 @@ function getStoredPhoneConsultationCommonTemplate() {
   return String(readJsonStorage(getScopedStorageKey(phoneConsultationCommonTemplateStorageKey), "") ?? "");
 }
 
-function setStoredPhoneConsultationCommonTemplate(content) {
+function getStoredPhoneConsultationCommonTemplateUpdatedAt() {
+  const storedTimestamp = String(
+    readJsonStorage(getScopedStorageKey(phoneConsultationCommonTemplateUpdatedAtStorageKey), "") ?? "",
+  );
+  if (storedTimestamp) return storedTimestamp;
+  if (!getStoredPhoneConsultationCommonTemplate().trim()) return "";
+
+  const legacyDraft = readJsonStorage(getScopedStorageKey(autoSaveDraftKey), {});
+  return String(legacyDraft?.phoneConsultationCommonTemplateUpdatedAt || legacyDraft?.updatedAt || "");
+}
+
+function setStoredPhoneConsultationCommonTemplate(content, { updatedAt = "", touch = true } = {}) {
   localStorage.setItem(getScopedStorageKey(phoneConsultationCommonTemplateStorageKey), JSON.stringify(String(content ?? "")));
+  const timestamp = updatedAt || (touch ? new Date().toISOString() : "");
+  if (timestamp) {
+    localStorage.setItem(
+      getScopedStorageKey(phoneConsultationCommonTemplateUpdatedAtStorageKey),
+      JSON.stringify(timestamp),
+    );
+  }
 }
 
 function getStoredPhoneConsultationCommonHighlight() {
@@ -1179,6 +1261,30 @@ function setStoredPhoneConsultationCommonHighlightStrokes(strokes) {
     getScopedStorageKey(phoneConsultationCommonTemplateHighlightStrokesStorageKey),
     JSON.stringify(Array.isArray(strokes) ? strokes : []),
   );
+}
+
+function recoverPhoneConsultationCommonDataToCurrentAccount() {
+  const currentContent = getStoredPhoneConsultationCommonTemplate();
+  if (currentContent.trim()) return { content: currentContent, recovered: false };
+
+  const currentKey = getScopedStorageKey(phoneConsultationCommonTemplateStorageKey);
+  const candidateKeys = [
+    phoneConsultationCommonTemplateStorageKey,
+    ...listStorageKeysWithPrefix(phoneConsultationCommonTemplateStorageKey),
+  ].filter((key, index, keys) => key !== currentKey && keys.indexOf(key) === index);
+  const selected = candidateKeys
+    .map((key) => ({ key, content: String(readJsonStorage(key, "") ?? "") }))
+    .filter((candidate) => candidate.content.trim())
+    .sort((left, right) => right.content.length - left.content.length)[0];
+  if (!selected) return { content: "", recovered: false };
+
+  const suffix = selected.key.slice(phoneConsultationCommonTemplateStorageKey.length);
+  const highlight = String(readJsonStorage(`${phoneConsultationCommonTemplateHighlightStorageKey}${suffix}`, "") ?? "");
+  const strokes = readJsonStorage(`${phoneConsultationCommonTemplateHighlightStrokesStorageKey}${suffix}`, []);
+  setStoredPhoneConsultationCommonTemplate(selected.content);
+  if (highlight) setStoredPhoneConsultationCommonHighlight(highlight);
+  if (Array.isArray(strokes) && strokes.length) setStoredPhoneConsultationCommonHighlightStrokes(strokes);
+  return { content: selected.content, recovered: true };
 }
 
 function getPhoneConsultationCustomerKey(customerId = activePhoneConsultationCustomerId || savedCustomerSelect?.value || "") {
@@ -2219,20 +2325,40 @@ function persistPhoneConsultationCloudDataFromDraft(draft) {
   }
 
   if (typeof draft.phoneConsultationCommonTemplate === "string") {
-    const currentTemplate = getStoredPhoneConsultationCommonTemplate();
-    if (draft.phoneConsultationCommonTemplate && draft.phoneConsultationCommonTemplate !== currentTemplate) {
-      setStoredPhoneConsultationCommonTemplate(draft.phoneConsultationCommonTemplate);
+    const incomingTime = new Date(draft.phoneConsultationCommonTemplateUpdatedAt || 0).getTime();
+    const currentTime = new Date(getStoredPhoneConsultationCommonTemplateUpdatedAt() || 0).getTime();
+    const shouldApply = incomingTime
+      ? incomingTime >= currentTime
+      : !getStoredPhoneConsultationCommonTemplate().trim() && draft.phoneConsultationCommonTemplate.trim();
+    if (shouldApply) {
+      setStoredPhoneConsultationCommonTemplate(draft.phoneConsultationCommonTemplate, {
+        updatedAt: draft.phoneConsultationCommonTemplateUpdatedAt || "",
+        touch: false,
+      });
+      if (typeof draft.phoneConsultationCommonHighlight === "string") {
+        setStoredPhoneConsultationCommonHighlight(draft.phoneConsultationCommonHighlight);
+      }
+      if (Array.isArray(draft.phoneConsultationCommonHighlightStrokes)) {
+        setStoredPhoneConsultationCommonHighlightStrokes(draft.phoneConsultationCommonHighlightStrokes);
+      }
+      changed = true;
+    }
+  } else {
+    if (typeof draft.phoneConsultationCommonHighlight === "string") {
+      setStoredPhoneConsultationCommonHighlight(draft.phoneConsultationCommonHighlight);
+      changed = true;
+    }
+    if (Array.isArray(draft.phoneConsultationCommonHighlightStrokes)) {
+      setStoredPhoneConsultationCommonHighlightStrokes(draft.phoneConsultationCommonHighlightStrokes);
       changed = true;
     }
   }
 
-  if (typeof draft.phoneConsultationCommonHighlight === "string") {
-    setStoredPhoneConsultationCommonHighlight(draft.phoneConsultationCommonHighlight);
-    changed = true;
-  }
-
-  if (Array.isArray(draft.phoneConsultationCommonHighlightStrokes)) {
-    setStoredPhoneConsultationCommonHighlightStrokes(draft.phoneConsultationCommonHighlightStrokes);
+  if (draft.phoneConsultationCommonTemplateUpdatedAt && !getStoredPhoneConsultationCommonTemplateUpdatedAt()) {
+    setStoredPhoneConsultationCommonTemplate(getStoredPhoneConsultationCommonTemplate(), {
+      updatedAt: draft.phoneConsultationCommonTemplateUpdatedAt,
+      touch: false,
+    });
     changed = true;
   }
 
@@ -2288,6 +2414,20 @@ function getPhoneConsultationMemoGroups(memos, customerId = savedCustomerSelect?
   ];
 }
 
+function selectPhoneConsultationMemoButton(memoId, { persist = true } = {}) {
+  if (!memoId) return;
+  viewedPhoneConsultationMemoId = memoId;
+  phoneConsultationMemoList?.querySelectorAll("[data-memo-id]").forEach((button) => {
+    const selected = button.dataset.memoId === memoId;
+    button.classList.toggle("is-selected", selected);
+    button.setAttribute("aria-pressed", String(selected));
+  });
+  if (persist) {
+    savePhoneConsultationDraftForCustomer();
+    scheduleCloudSync();
+  }
+}
+
 function renderPhoneConsultationMemoButtons(selectedId = viewedPhoneConsultationMemoId) {
   if (!phoneConsultationMemoList) return;
   const memos = getOrderedPhoneConsultationMemos();
@@ -2333,7 +2473,9 @@ function renderPhoneConsultationMemoButtons(selectedId = viewedPhoneConsultation
       const button = document.createElement("button");
       button.type = "button";
       button.className = "phone-consultation-memo-button";
-      if (memo.id === selectedId) button.classList.add("is-selected");
+      const selected = memo.id === selectedId;
+      if (selected) button.classList.add("is-selected");
+      button.setAttribute("aria-pressed", String(selected));
       button.dataset.memoId = memo.id;
       button.draggable = true;
       button.title = "마우스로 끌어서 순서를 바꿀 수 있습니다.";
@@ -2406,7 +2548,7 @@ function loadPhoneConsultationById(id) {
       showPhoneConsultationStatus("저장된 메모를 찾지 못했습니다.");
       return;
     }
-    viewedPhoneConsultationMemoId = memo.id;
+    selectPhoneConsultationMemoButton(memo.id, { persist: false });
     if (phoneConsultationCommonTemplateInput) {
       phoneConsultationCommonTemplateInput.value = memo.content || "";
     }
@@ -4994,7 +5136,16 @@ function readCustomersFromStorageKey(key) {
 
 function recoverAllStoredDataToCurrentAccount({ quiet = false } = {}) {
   if (!currentSession?.user?.id) {
-    return { customers: [], designManagers: [], recoveredCustomerCount: 0, sources: [] };
+    return {
+      customers: [],
+      designManagers: [],
+      phoneMemos: [],
+      commonTemplate: "",
+      recoveredCustomerCount: 0,
+      recoveredMemoCount: 0,
+      recoveredCommonTemplate: false,
+      sources: [],
+    };
   }
 
   const customerKey = getScopedStorageKey(customerStorageKey);
@@ -5054,10 +5205,13 @@ function recoverAllStoredDataToCurrentAccount({ quiet = false } = {}) {
   });
 
   const existingCustomers = readCustomersFromStorageKey(customerKey);
+  const existingPhoneMemoCount = getStoredPhoneConsultationMemos().length;
   const mergedCustomers = mergeCustomers(...customerLists);
   const mergedDesignManagers = mergeDesignManagers(...designManagerLists);
   const mergedDraft = mergeDraftSnapshots(...draftLists);
   const recoveredCustomerCount = Math.max(0, mergedCustomers.length - existingCustomers.length);
+  const phoneMemos = recoverPhoneConsultationMemosToCurrentAccount();
+  const recoveredMemoCount = Math.max(0, phoneMemos.length - existingPhoneMemoCount);
 
   if (mergedCustomers.length) {
     localStorage.setItem(customerKey, JSON.stringify(mergedCustomers));
@@ -5069,9 +5223,13 @@ function recoverAllStoredDataToCurrentAccount({ quiet = false } = {}) {
     persistDraftSnapshot(mergedDraft);
     persistPhoneConsultationCloudDataFromDraft(mergedDraft);
   }
+  const commonTemplateRecovery = recoverPhoneConsultationCommonDataToCurrentAccount();
 
-  if (!quiet && recoveredCustomerCount > 0) {
-    showManagerStatus(`이전 저장 고객 ${recoveredCustomerCount}명을 복구했습니다.`);
+  if (!quiet && (recoveredCustomerCount > 0 || recoveredMemoCount > 0 || commonTemplateRecovery.recovered)) {
+    showManagerStatus(
+      `이전 저장 고객 ${recoveredCustomerCount}명, 메모 ${recoveredMemoCount}건`
+      + `${commonTemplateRecovery.recovered ? ", 공통 메모" : ""}을 복구했습니다.`,
+    );
   } else if (!quiet && mergedCustomers.length) {
     showManagerStatus(`저장 고객 ${mergedCustomers.length}명을 불러왔습니다.`);
   }
@@ -5079,13 +5237,17 @@ function recoverAllStoredDataToCurrentAccount({ quiet = false } = {}) {
   return {
     customers: mergedCustomers,
     designManagers: mergedDesignManagers,
+    phoneMemos,
+    commonTemplate: commonTemplateRecovery.content,
     recoveredCustomerCount,
+    recoveredMemoCount,
+    recoveredCommonTemplate: commonTemplateRecovery.recovered,
     sources: [...new Set(sources)],
   };
 }
 
 function migrateLegacyDataToCurrentAccount() {
-  recoverAllStoredDataToCurrentAccount({ quiet: true });
+  return recoverAllStoredDataToCurrentAccount({ quiet: true });
 }
 
 function openLocalAccount(account) {
@@ -5198,16 +5360,14 @@ async function recoverLocalAccountThroughCloudSignup(localAccount, reason = "") 
     });
 
     if (error) {
-      openLocalAccount(localAccount);
-      authStatus.textContent = `기존 이 기기 저장 사용자를 불러왔습니다. 클라우드 복구는 실패했습니다: ${error.message}`;
-      return true;
+      authStatus.textContent = `기존 이 기기 저장 자료는 보존했습니다. 클라우드 복구는 실패했습니다: ${error.message}`;
+      return false;
     }
 
     const session = normalizeSupabaseSession(data);
     if (!session) {
-      openLocalAccount(localAccount);
-      authStatus.textContent = "기존 이 기기 저장 사용자를 불러왔습니다. 클라우드 가입 확인 설정 때문에 서버 전환은 보류되었습니다.";
-      return true;
+      authStatus.textContent = "기존 이 기기 저장 자료는 보존했습니다. 클라우드 가입 확인 설정 때문에 서버 전환은 보류되었습니다.";
+      return false;
     }
 
     localMode = false;
@@ -5219,9 +5379,8 @@ async function recoverLocalAccountThroughCloudSignup(localAccount, reason = "") 
       : "기존 이 기기 저장 고객정보를 클라우드 사용자로 복구했습니다.";
     return true;
   } catch (error) {
-    openLocalAccount(localAccount);
-    authStatus.textContent = `기존 이 기기 저장 사용자를 불러왔습니다. 클라우드 복구 요청은 실패했습니다: ${error.message}`;
-    return true;
+    authStatus.textContent = `기존 이 기기 저장 자료는 보존했습니다. 클라우드 복구 요청은 실패했습니다: ${error.message}`;
+    return false;
   }
 }
 
@@ -5249,7 +5408,7 @@ function showCustomerApp() {
 
 async function pushCloudSnapshot() {
   if (!supabaseClient || !currentSession || isHydratingCloud || localMode || !hasCloudHydrated) {
-    setSyncStatus("저장 차단됨", {
+    setSyncStatus(localMode ? "클라우드 로그인 필요" : "저장 준비 중", {
       reason: !supabaseClient
         ? "supabaseClient 없음"
         : !currentSession
@@ -5282,15 +5441,19 @@ async function pushCloudSnapshot() {
   const mergedDesignManagers = mergeDesignManagers(latestDesignManagers, getStoredDesignManagers());
   const latestPhoneMemos = Array.isArray(latestCloudRow?.draft?.phoneConsultationMemos) ? latestCloudRow.draft.phoneConsultationMemos : [];
   const mergedPhoneMemos = mergePhoneConsultationMemos(latestPhoneMemos, getStoredPhoneConsultationMemos());
-  const phoneTemplate = getStoredPhoneConsultationCommonTemplate()
-    || latestCloudRow?.draft?.phoneConsultationCommonTemplate
-    || "";
-  const phoneCommonHighlight = getStoredPhoneConsultationCommonHighlight()
-    || latestCloudRow?.draft?.phoneConsultationCommonHighlight
-    || "";
-  const phoneCommonHighlightStrokes = getStoredPhoneConsultationCommonHighlightStrokes().length
-    ? getStoredPhoneConsultationCommonHighlightStrokes()
-    : (latestCloudRow?.draft?.phoneConsultationCommonHighlightStrokes || []);
+  const selectedCommonTemplate = pickLatestCommonTemplate(
+    latestCloudRow?.draft,
+    {
+      phoneConsultationCommonTemplate: getStoredPhoneConsultationCommonTemplate(),
+      phoneConsultationCommonTemplateUpdatedAt: getStoredPhoneConsultationCommonTemplateUpdatedAt(),
+      phoneConsultationCommonHighlight: getStoredPhoneConsultationCommonHighlight(),
+      phoneConsultationCommonHighlightStrokes: getStoredPhoneConsultationCommonHighlightStrokes(),
+    },
+  );
+  const phoneTemplate = selectedCommonTemplate.content;
+  const phoneTemplateUpdatedAt = selectedCommonTemplate.updatedAt;
+  const phoneCommonHighlight = selectedCommonTemplate.highlight;
+  const phoneCommonHighlightStrokes = selectedCommonTemplate.strokes;
   const phoneDrafts = mergePhoneConsultationRecordMap(
     latestCloudRow?.draft?.phoneConsultationDrafts,
     getStoredPhoneConsultationDrafts(),
@@ -5320,6 +5483,7 @@ async function pushCloudSnapshot() {
       designManagers: mergedDesignManagers,
       phoneConsultationMemos: mergedPhoneMemos,
       phoneConsultationCommonTemplate: phoneTemplate,
+      phoneConsultationCommonTemplateUpdatedAt: phoneTemplateUpdatedAt,
       phoneConsultationCommonHighlight: phoneCommonHighlight,
       phoneConsultationCommonHighlightStrokes: phoneCommonHighlightStrokes,
       phoneConsultationDrafts: phoneDrafts,
@@ -5335,6 +5499,7 @@ async function pushCloudSnapshot() {
     designManagers: mergedDesignManagers,
     phoneConsultationMemos: mergedPhoneMemos,
     phoneConsultationCommonTemplate: phoneTemplate,
+    phoneConsultationCommonTemplateUpdatedAt: phoneTemplateUpdatedAt,
     phoneConsultationCommonHighlight: phoneCommonHighlight,
     phoneConsultationCommonHighlightStrokes: phoneCommonHighlightStrokes,
     phoneConsultationDrafts: phoneDrafts,
@@ -5385,7 +5550,10 @@ async function pushCloudSnapshot() {
     localStorage.setItem(getScopedStorageKey(customerStorageKey), JSON.stringify(mergedCustomers));
     localStorage.setItem(getScopedStorageKey(designManagerStorageKey), JSON.stringify(mergedDesignManagers));
     setStoredPhoneConsultationMemos(mergedPhoneMemos);
-    setStoredPhoneConsultationCommonTemplate(phoneTemplate);
+    setStoredPhoneConsultationCommonTemplate(phoneTemplate, {
+      updatedAt: phoneTemplateUpdatedAt,
+      touch: false,
+    });
     setStoredPhoneConsultationCommonHighlight(phoneCommonHighlight);
     setStoredPhoneConsultationCommonHighlightStrokes(phoneCommonHighlightStrokes);
     setStoredPhoneConsultationDrafts(phoneDrafts);
@@ -5405,7 +5573,7 @@ async function pushCloudSnapshot() {
 
 function scheduleCloudSync() {
   if (!supabaseClient || !currentSession || isHydratingCloud || localMode || !hasCloudHydrated) {
-    setSyncStatus("저장 차단됨", {
+    setSyncStatus(localMode ? "클라우드 로그인 필요" : "저장 준비 중", {
       reason: !hasCloudHydrated ? "hasCloudHydrated=false" : "세션/서버 상태 미준비",
     });
     return;
@@ -5446,7 +5614,7 @@ function restoreUiFromCurrentStorage() {
   restorePhoneConsultationDraftForCustomer(savedCustomerSelect.value);
   restoreRememberedViewMode();
 
-  if (!localMode && hasCloudHydrated && recovery.recoveredCustomerCount > 0) {
+  if (!localMode && hasCloudHydrated && (recovery.recoveredCustomerCount > 0 || recovery.recoveredMemoCount > 0)) {
     scheduleCloudSync();
   }
 }
@@ -5458,7 +5626,10 @@ async function hydrateFromCloud() {
   setSyncStatus("서버 불러오는 중");
   let shouldPushAfterHydrate = false;
 
-  migrateLegacyDataToCurrentAccount();
+  const migrationRecovery = migrateLegacyDataToCurrentAccount();
+  if (migrationRecovery.recoveredCustomerCount > 0 || migrationRecovery.recoveredMemoCount > 0) {
+    shouldPushAfterHydrate = true;
+  }
 
   const customerKey = getScopedStorageKey(customerStorageKey);
   const draftKey = getScopedStorageKey(autoSaveDraftKey);
@@ -5547,7 +5718,7 @@ async function hydrateFromCloud() {
   isHydratingCloud = false;
   hasCloudHydrated = true;
   const recovery = recoverAllStoredDataToCurrentAccount({ quiet: true });
-  if (recovery.recoveredCustomerCount > 0) {
+  if (recovery.recoveredCustomerCount > 0 || recovery.recoveredMemoCount > 0) {
     shouldPushAfterHydrate = true;
   }
   setSyncStatus("서버 데이터 불러오기 완료", {
@@ -5661,7 +5832,6 @@ async function loginWithEmail(event) {
     return;
   }
   if (hasSupabaseConfigValues() && !ensureSupabaseReadyForAuth()) {
-    await loginOrCreateLocalAccount();
     return;
   }
   const settings = await getSupabaseAuthSettings();
@@ -5702,10 +5872,7 @@ async function loginWithEmail(event) {
       }
 
       if (shouldFallbackToLocalAuth(error.message)) {
-        const localLoggedIn = await loginOrCreateLocalAccount(`클라우드 연결 실패: ${error.message}`);
-        if (!localLoggedIn) {
-          authStatus.textContent = `클라우드 연결 실패: ${error.message}\n이 기기 저장 계정도 찾지 못했습니다. 처음이면 회원가입을 눌러주세요.`;
-        }
+        authStatus.textContent = `클라우드 로그인 실패: ${error.message}\n동기화를 위해 이 기기 저장 모드로 전환하지 않았습니다. 잠시 후 다시 시도해주세요.`;
         return;
       }
 
@@ -5721,12 +5888,9 @@ async function loginWithEmail(event) {
     authStatus.textContent = "고객정보를 불러왔습니다.";
   } catch (error) {
     if (shouldFallbackToLocalAuth(error.message)) {
-      const localLoggedIn = await loginOrCreateLocalAccount(`클라우드 요청 실패: ${error.message}`);
-      if (!localLoggedIn) {
-        authStatus.textContent = error.message.includes("non ISO-8859-1")
-          ? "로그인 실패: supabase-config.js의 anon public key와 브라우저 캐시를 확인해주세요. 이 기기 저장 계정도 찾지 못했습니다."
-          : `로그인 실패: ${error.message}\n이 기기 저장 계정도 찾지 못했습니다.`;
-      }
+      authStatus.textContent = error.message.includes("non ISO-8859-1")
+        ? "로그인 실패: Supabase 연결값과 브라우저 캐시를 확인해주세요."
+        : `클라우드 로그인 실패: ${error.message}\n동기화를 위해 로컬 계정으로 전환하지 않았습니다.`;
       return;
     }
 
@@ -5740,7 +5904,6 @@ async function signupWithEmail() {
     return;
   }
   if (hasSupabaseConfigValues() && !ensureSupabaseReadyForAuth()) {
-    await signupLocalAccount();
     return;
   }
 
@@ -5763,12 +5926,12 @@ async function signupWithEmail() {
   try {
     const settings = await getSupabaseAuthSettings();
     if (settings?.external?.email === false) {
-      await signupLocalAccount();
+      authStatus.textContent = "클라우드 회원가입 불가: Supabase Email 로그인을 켜주세요.";
       return;
     }
 
     if (settings?.mailer_autoconfirm === false) {
-      await signupLocalAccount();
+      authStatus.textContent = "클라우드 회원가입 확인 설정을 완료해주세요.";
       return;
     }
 
@@ -5788,10 +5951,7 @@ async function signupWithEmail() {
       }
 
       if (shouldFallbackToLocalAuth(error.message)) {
-        const localSignedUp = await signupLocalAccount();
-        if (!localSignedUp) {
-          authStatus.textContent = `클라우드 회원가입 실패: ${error.message}\n이 기기 저장 계정 생성도 실패했습니다.`;
-        }
+        authStatus.textContent = `클라우드 회원가입 실패: ${error.message}\n동기화를 위해 로컬 계정을 만들지 않았습니다.`;
         return;
       }
 
@@ -5816,12 +5976,9 @@ async function signupWithEmail() {
       if (recovered) return;
     }
 
-    const localSignedUp = await signupLocalAccount();
-    if (!localSignedUp) {
-      authStatus.textContent = error.message.includes("non ISO-8859-1")
-        ? "회원가입 실패: supabase-config.js의 anon public key와 브라우저 캐시를 확인해주세요. 이 기기 저장 계정 생성도 실패했습니다."
-        : `회원가입 실패: ${error.message}\n이 기기 저장 계정 생성도 실패했습니다.`;
-    }
+    authStatus.textContent = error.message.includes("non ISO-8859-1")
+      ? "회원가입 실패: Supabase 연결값과 브라우저 캐시를 확인해주세요."
+      : `클라우드 회원가입 실패: ${error.message}\n로컬 계정은 생성하지 않았습니다.`;
   }
 }
 
@@ -9125,6 +9282,7 @@ function saveAutoDraft(state = collectCustomerState()) {
       designManagers: getStoredDesignManagers(),
       phoneConsultationMemos: getStoredPhoneConsultationMemos(),
       phoneConsultationCommonTemplate: getStoredPhoneConsultationCommonTemplate(),
+      phoneConsultationCommonTemplateUpdatedAt: getStoredPhoneConsultationCommonTemplateUpdatedAt(),
       phoneConsultationCommonHighlight: getStoredPhoneConsultationCommonHighlight(),
       phoneConsultationCommonHighlightStrokes: getStoredPhoneConsultationCommonHighlightStrokes(),
       phoneConsultationDrafts: getStoredPhoneConsultationDrafts(),
@@ -9729,6 +9887,12 @@ function bindApplicationUiEvents() {
   safeOn(phoneConsultationButton, "click", openPhoneConsultation);
   safeOn(promotionButton, "click", openPromotion);
   safeOn(savePhoneConsultationButton, "click", savePhoneConsultationMemo);
+  safeOn(phoneConsultationMemoList, "pointerdown", (event) => {
+    if (event.target.closest("[data-memo-delete-id], [data-memo-group-title]")) return;
+    const button = event.target.closest("[data-memo-id]");
+    if (!button) return;
+    selectPhoneConsultationMemoButton(button.dataset.memoId);
+  });
   safeOn(phoneConsultationMemoList, "click", (event) => {
     const deleteButton = event.target.closest("[data-memo-delete-id]");
     if (deleteButton) {

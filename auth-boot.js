@@ -1,6 +1,8 @@
 (function bootstrapInsuranceAuthKernel() {
   const ACCOUNTS_KEY = "insuranceDisclosureLocalAccounts";
   const LOCAL_SESSION_KEY = "insuranceDisclosureLocalSession";
+  const CLOUD_SESSION_KEY = "insuranceDisclosureCloudSession";
+  const CLOUD_SESSION_BACKUP_KEY = "insuranceDisclosureCloudSessionBackup";
 
   let appAuth = null;
 
@@ -25,6 +27,28 @@
 
   function normalizePhone(value) {
     return String(value ?? "").replace(/\D/g, "");
+  }
+
+  function readCloudSession() {
+    const localSession = readJson(CLOUD_SESSION_KEY, null);
+    if (localSession?.user?.id && localSession.access_token) return localSession;
+    try {
+      const backup = JSON.parse(sessionStorage.getItem(CLOUD_SESSION_BACKUP_KEY) || "null");
+      return backup?.user?.id && backup.access_token ? backup : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function isValidPhone(value) {
+    const phone = normalizePhone(value);
+    return phone.length >= 10 && phone.length <= 12;
+  }
+
+  function hasCloudConfig() {
+    const config = window.INSURANCE_APP_CONFIG || {};
+    return /^https:\/\/.+\.supabase\.co$/i.test(String(config.supabaseUrl || "").trim())
+      && String(config.supabaseAnonKey || "").trim().length > 20;
   }
 
   function normalizeName(value) {
@@ -78,6 +102,14 @@
   }
 
   function restoreFastLocalSession() {
+    if (hasCloudConfig()) {
+      localStorage.removeItem(LOCAL_SESSION_KEY);
+      showLoginScreen(readCloudSession()
+        ? "클라우드 로그인 정보를 복원하는 중..."
+        : "클라우드 계정으로 로그인해주세요. 이 기기 저장 계정은 자동으로 열지 않습니다.");
+      return false;
+    }
+
     const saved = readJson(LOCAL_SESSION_KEY, null);
     if (!saved?.user?.id) {
       showLoginScreen("이름과 연락처로 로그인하거나 회원가입해주세요.");
@@ -104,8 +136,8 @@
     const { authName, authPhone } = getElements();
     const name = authName?.value.trim() ?? "";
     const phone = normalizePhone(authPhone?.value ?? "");
-    if (!name || phone.length < 10) {
-      setStatus("이름과 연락처를 정확히 입력해주세요.");
+    if (!name || !isValidPhone(phone)) {
+      setStatus("연락처는 보안용 숫자를 포함해 10~12자리로 입력해주세요.");
       return;
     }
 
@@ -129,8 +161,8 @@
     const { authName, authPhone } = getElements();
     const name = authName?.value.trim() ?? "";
     const phone = normalizePhone(authPhone?.value ?? "");
-    if (!name || phone.length < 10) {
-      setStatus("이름과 연락처를 정확히 입력해주세요.");
+    if (!name || !isValidPhone(phone)) {
+      setStatus("연락처는 보안용 숫자를 포함해 10~12자리로 입력해주세요.");
       return;
     }
 
@@ -191,8 +223,12 @@
         const handlers = await waitForAppAuth();
         await handlers.login(event);
       } catch (error) {
-        console.warn("[auth-kernel] falling back to local login", error);
-        emergencyLocalLogin();
+        console.warn("[auth-kernel] login handler unavailable", error);
+        if (hasCloudConfig()) {
+          setStatus("클라우드 로그인을 준비하지 못했습니다. 화면을 새로고침한 뒤 다시 시도해주세요.");
+        } else {
+          emergencyLocalLogin();
+        }
       }
     });
 
@@ -202,8 +238,12 @@
         const handlers = await waitForAppAuth();
         await handlers.signup();
       } catch (error) {
-        console.warn("[auth-kernel] falling back to local signup", error);
-        emergencyLocalSignup();
+        console.warn("[auth-kernel] signup handler unavailable", error);
+        if (hasCloudConfig()) {
+          setStatus("클라우드 회원가입을 준비하지 못했습니다. 화면을 새로고침한 뒤 다시 시도해주세요.");
+        } else {
+          emergencyLocalSignup();
+        }
       }
     });
   }
