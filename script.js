@@ -16,6 +16,7 @@ const openContractManagementButton = document.querySelector("#openContractManage
 const openDesignManagerButton = document.querySelector("#openDesignManagerButton");
 const phoneConsultationButton = document.querySelector("#phoneConsultationButton");
 const promotionButton = document.querySelector("#promotionButton");
+const syncAllCloudButton = document.querySelector("#syncAllCloudButton");
 const phoneConsultationMemoList = document.querySelector("#phoneConsultationMemoList");
 const phoneConsultationTitleInput = document.querySelector("#phoneConsultationTitleInput");
 const phoneConsultationMemoInput = document.querySelector("#phoneConsultationMemoInput");
@@ -425,7 +426,20 @@ function mergeDraftSnapshots(...drafts) {
         Array.isArray(oldest?.phoneConsultationMemos) ? oldest.phoneConsultationMemos : [],
         Array.isArray(latest?.phoneConsultationMemos) ? latest.phoneConsultationMemos : [],
       ),
-      phoneConsultationCommonTemplate: latest?.phoneConsultationCommonTemplate ?? oldest?.phoneConsultationCommonTemplate ?? "",
+      phoneConsultationCommonTemplate:
+        latest?.phoneConsultationCommonTemplate
+        || oldest?.phoneConsultationCommonTemplate
+        || "",
+      phoneConsultationCommonHighlight:
+        latest?.phoneConsultationCommonHighlight
+        || oldest?.phoneConsultationCommonHighlight
+        || "",
+      phoneConsultationCommonHighlightStrokes:
+        (Array.isArray(latest?.phoneConsultationCommonHighlightStrokes)
+          && latest.phoneConsultationCommonHighlightStrokes.length
+          ? latest.phoneConsultationCommonHighlightStrokes
+          : oldest?.phoneConsultationCommonHighlightStrokes)
+        || [],
       phoneConsultationDrafts: mergePhoneConsultationRecordMap(oldest?.phoneConsultationDrafts, latest?.phoneConsultationDrafts),
       phoneConsultationOrders: mergePhoneConsultationRecordMap(oldest?.phoneConsultationOrders, latest?.phoneConsultationOrders),
       promotionPosts: mergePromotionPosts(
@@ -754,8 +768,49 @@ async function flushCloudSyncNow(reason = "수동 저장") {
     return false;
   }
 
-  await pushCloudSnapshot();
-  return true;
+  return pushCloudSnapshot();
+}
+
+async function syncAllCloudData() {
+  if (localMode || isLocalAuthSession(currentSession)) {
+    setSyncStatus("이 기기 저장 모드 - 클라우드 동기화 불가");
+    showManagerStatus("현재 로그인은 이 기기 저장 모드입니다. 로그아웃 후 클라우드 계정으로 로그인해주세요.");
+    return;
+  }
+  if (!supabaseClient || !currentSession?.access_token) {
+    setSyncStatus("클라우드 로그인 필요");
+    showManagerStatus("로그아웃 후 이름과 연락처로 클라우드 로그인해주세요.");
+    return;
+  }
+
+  if (syncAllCloudButton) syncAllCloudButton.disabled = true;
+  try {
+    runAutoSave();
+    window.clearTimeout(cloudSyncTimer);
+    setSyncStatus("전체 데이터 다시 불러오는 중");
+    await hydrateFromCloud();
+    const saved = await pushCloudSnapshot();
+    if (!saved) throw new Error("클라우드 저장을 완료하지 못했습니다.");
+    renderPhoneConsultationMemoButtons(viewedPhoneConsultationMemoId);
+    renderPhoneConsultationCommonTemplate();
+    restorePhoneConsultationDraftForCustomer(savedCustomerSelect.value);
+    renderDesignManagers();
+    renderPromotionSavedList();
+    renderSavedCustomerList(savedCustomerSelect.value);
+    setSyncStatus("전체 동기화 완료", {
+      customers: getStoredCustomers().length,
+      memos: getStoredPhoneConsultationMemos().length,
+      insurers: getStoredDesignManagers().length,
+    });
+    showManagerStatus(
+      `전체 동기화 완료: 고객 ${getStoredCustomers().length}명, 저장 메모 ${getStoredPhoneConsultationMemos().length}건`,
+    );
+  } catch (error) {
+    setSyncStatus("전체 동기화 실패", { reason: error.message });
+    showManagerStatus(`전체 동기화 실패: ${error.message}`);
+  } finally {
+    if (syncAllCloudButton) syncAllCloudButton.disabled = false;
+  }
 }
 
 function showManagerStatus(message) {
@@ -2128,6 +2183,16 @@ function persistPhoneConsultationCloudDataFromDraft(draft) {
       setStoredPhoneConsultationCommonTemplate(draft.phoneConsultationCommonTemplate);
       changed = true;
     }
+  }
+
+  if (typeof draft.phoneConsultationCommonHighlight === "string") {
+    setStoredPhoneConsultationCommonHighlight(draft.phoneConsultationCommonHighlight);
+    changed = true;
+  }
+
+  if (Array.isArray(draft.phoneConsultationCommonHighlightStrokes)) {
+    setStoredPhoneConsultationCommonHighlightStrokes(draft.phoneConsultationCommonHighlightStrokes);
+    changed = true;
   }
 
   if (draft.phoneConsultationDrafts && typeof draft.phoneConsultationDrafts === "object") {
@@ -4841,12 +4906,22 @@ function removeDeletedCustomers(customers, deletedIds = getPendingDeletedCustome
   return customers.filter((customer) => !deletedSet.has(customer.id));
 }
 
-async function fetchCloudSnapshot() {
+async function fetchCloudSnapshot({ retryAfterRefresh = true } = {}) {
   if (!supabaseClient || !currentSession || localMode) return { row: null, error: null };
   const { data, error } = await supabaseJson(
     `/rest/v1/insurance_app_data?select=customers,draft,updated_at&user_id=eq.${encodeURIComponent(currentSession.user.id)}`,
     { authToken: currentSession.access_token },
   );
+
+  if (error && retryAfterRefresh && currentSession.refresh_token) {
+    const refreshedSession = await refreshCloudSession(currentSession);
+    if (refreshedSession?.access_token) {
+      currentSession = refreshedSession;
+      activeUserId = refreshedSession.user?.id || activeUserId;
+      saveCloudSession(refreshedSession);
+      return fetchCloudSnapshot({ retryAfterRefresh: false });
+    }
+  }
 
   return { row: Array.isArray(data) ? data[0] : data, error };
 }
@@ -5144,7 +5219,7 @@ async function pushCloudSnapshot() {
               ? "로컬 모드"
               : "hasCloudHydrated=false",
     });
-    return;
+    return false;
   }
 
   setSyncStatus("저장 중");
@@ -5166,9 +5241,23 @@ async function pushCloudSnapshot() {
   const mergedDesignManagers = mergeDesignManagers(latestDesignManagers, getStoredDesignManagers());
   const latestPhoneMemos = Array.isArray(latestCloudRow?.draft?.phoneConsultationMemos) ? latestCloudRow.draft.phoneConsultationMemos : [];
   const mergedPhoneMemos = mergePhoneConsultationMemos(latestPhoneMemos, getStoredPhoneConsultationMemos());
-  const phoneTemplate = getStoredPhoneConsultationCommonTemplate();
-  const phoneDrafts = getStoredPhoneConsultationDrafts();
-  const phoneOrders = getStoredPhoneConsultationOrders();
+  const phoneTemplate = getStoredPhoneConsultationCommonTemplate()
+    || latestCloudRow?.draft?.phoneConsultationCommonTemplate
+    || "";
+  const phoneCommonHighlight = getStoredPhoneConsultationCommonHighlight()
+    || latestCloudRow?.draft?.phoneConsultationCommonHighlight
+    || "";
+  const phoneCommonHighlightStrokes = getStoredPhoneConsultationCommonHighlightStrokes().length
+    ? getStoredPhoneConsultationCommonHighlightStrokes()
+    : (latestCloudRow?.draft?.phoneConsultationCommonHighlightStrokes || []);
+  const phoneDrafts = mergePhoneConsultationRecordMap(
+    latestCloudRow?.draft?.phoneConsultationDrafts,
+    getStoredPhoneConsultationDrafts(),
+  );
+  const phoneOrders = mergePhoneConsultationRecordMap(
+    latestCloudRow?.draft?.phoneConsultationOrders,
+    getStoredPhoneConsultationOrders(),
+  );
   const latestPromotionPosts = Array.isArray(latestCloudRow?.draft?.promotionPosts) ? latestCloudRow.draft.promotionPosts : [];
   const promotionPosts = mergePromotionPosts(latestPromotionPosts, getStoredPromotionPosts());
 
@@ -5190,6 +5279,8 @@ async function pushCloudSnapshot() {
       designManagers: mergedDesignManagers,
       phoneConsultationMemos: mergedPhoneMemos,
       phoneConsultationCommonTemplate: phoneTemplate,
+      phoneConsultationCommonHighlight: phoneCommonHighlight,
+      phoneConsultationCommonHighlightStrokes: phoneCommonHighlightStrokes,
       phoneConsultationDrafts: phoneDrafts,
       phoneConsultationOrders: phoneOrders,
       promotionPosts,
@@ -5203,6 +5294,8 @@ async function pushCloudSnapshot() {
     designManagers: mergedDesignManagers,
     phoneConsultationMemos: mergedPhoneMemos,
     phoneConsultationCommonTemplate: phoneTemplate,
+    phoneConsultationCommonHighlight: phoneCommonHighlight,
+    phoneConsultationCommonHighlightStrokes: phoneCommonHighlightStrokes,
     phoneConsultationDrafts: phoneDrafts,
     phoneConsultationOrders: phoneOrders,
     promotionPosts,
@@ -5246,13 +5339,26 @@ async function pushCloudSnapshot() {
   if (error) {
     setSyncStatus("저장 차단됨", { reason: error.message });
     showManagerStatus(`클라우드 저장 실패: ${error.message}`);
+    return false;
   } else {
     localStorage.setItem(getScopedStorageKey(customerStorageKey), JSON.stringify(mergedCustomers));
     localStorage.setItem(getScopedStorageKey(designManagerStorageKey), JSON.stringify(mergedDesignManagers));
+    setStoredPhoneConsultationMemos(mergedPhoneMemos);
+    setStoredPhoneConsultationCommonTemplate(phoneTemplate);
+    setStoredPhoneConsultationCommonHighlight(phoneCommonHighlight);
+    setStoredPhoneConsultationCommonHighlightStrokes(phoneCommonHighlightStrokes);
+    setStoredPhoneConsultationDrafts(phoneDrafts);
+    setStoredPhoneConsultationOrders(phoneOrders);
+    setStoredPromotionPosts(promotionPosts);
     clearPendingDeletedCustomerIds();
     console.info("[sync] 저장 후 서버에 저장된 customers 개수", mergedCustomers.length);
-    setSyncStatus("저장 완료", { savedCustomers: mergedCustomers.length });
+    setSyncStatus("저장 완료", {
+      savedCustomers: mergedCustomers.length,
+      savedMemos: mergedPhoneMemos.length,
+      savedInsurers: mergedDesignManagers.length,
+    });
     showManagerStatus("클라우드 저장 완료");
+    return true;
   }
 }
 
@@ -5479,8 +5585,11 @@ function registerInsuranceAuthKernel() {
     onPageHide: () => {
       if (appRoot?.classList.contains("is-auth-hidden")) return;
       window.clearTimeout(autoSaveTimer);
-      rememberUiSession();
+      runAutoSave();
       persistAuthSessionSnapshot();
+      if (!localMode && hasCloudHydrated) {
+        void flushCloudSyncNow("화면 종료 전 자동 저장");
+      }
     },
     onAppReady: () => {
       void initializeAuthentication();
@@ -8975,6 +9084,8 @@ function saveAutoDraft(state = collectCustomerState()) {
       designManagers: getStoredDesignManagers(),
       phoneConsultationMemos: getStoredPhoneConsultationMemos(),
       phoneConsultationCommonTemplate: getStoredPhoneConsultationCommonTemplate(),
+      phoneConsultationCommonHighlight: getStoredPhoneConsultationCommonHighlight(),
+      phoneConsultationCommonHighlightStrokes: getStoredPhoneConsultationCommonHighlightStrokes(),
       phoneConsultationDrafts: getStoredPhoneConsultationDrafts(),
       phoneConsultationOrders: getStoredPhoneConsultationOrders(),
       promotionPosts: getStoredPromotionPosts(),
@@ -9021,7 +9132,14 @@ function upsertAutoSavedCustomer(state) {
 }
 
 function runAutoSave() {
-  rememberUiSession();
+  const state = collectCustomerState();
+  const savedId = upsertAutoSavedCustomer(state);
+  saveAutoDraft(state);
+  rememberUiSession(savedId ? { selectedId: savedId } : {});
+  if (savedId) {
+    renderSavedCustomerList(savedId);
+  }
+  scheduleCloudSync();
 }
 
 async function saveCurrentCustomerAndSync() {
@@ -9031,7 +9149,7 @@ async function saveCurrentCustomerAndSync() {
 
 function scheduleAutoSave() {
   window.clearTimeout(autoSaveTimer);
-  autoSaveTimer = window.setTimeout(rememberUiSession, 700);
+  autoSaveTimer = window.setTimeout(runAutoSave, 700);
 }
 
 function restoreAutoSavedDraft() {
@@ -9730,7 +9848,10 @@ function bindApplicationUiEvents() {
     });
     commonHighlightResizeObserver.observe(phoneConsultationCommonCanvasWrap);
   }
-  safeOn(phoneConsultationTitleInput, "input", () => savePhoneConsultationDraftForCustomer());
+  safeOn(phoneConsultationTitleInput, "input", () => {
+    savePhoneConsultationDraftForCustomer();
+    scheduleCloudSync();
+  });
   safeOn(phoneConsultationMemoInput, "scroll", syncPhoneConsultationHighlightScroll);
   safeOn(phoneConsultationMemoInput, "input", () => {
     const nextText = phoneConsultationMemoInput.value || "";
@@ -9752,6 +9873,7 @@ function bindApplicationUiEvents() {
       sizePhoneConsultationHighlightCanvas(currentImage);
     }
     savePhoneConsultationDraftForCustomer();
+    scheduleCloudSync();
   });
   safeOn(phoneConsultationCommonTemplateInput, "scroll", syncPhoneConsultationCommonHighlightScroll);
   safeOn(phoneConsultationCommonTemplateInput, "input", () => {
@@ -9776,6 +9898,7 @@ function bindApplicationUiEvents() {
       sizePhoneConsultationCommonHighlightCanvas(currentImage);
     }
     savePhoneConsultationDraftForCustomer();
+    scheduleCloudSync();
   });
   safeOn(generatePromotionButton, "click", generatePromotionCopy);
   safeOn(copyPromotionButton, "click", copyPromotionCopy);
@@ -9884,6 +10007,9 @@ function bindApplicationUiEvents() {
   safeOn(window, "online", scheduleCloudSync);
   safeOn(saveCustomerButton, "click", () => {
     void saveCurrentCustomerAndSync();
+  });
+  safeOn(syncAllCloudButton, "click", () => {
+    void syncAllCloudData();
   });
   safeOn(loadCustomerButton, "click", loadSelectedCustomer);
   safeOn(recoverCustomerButton, "click", recoverStoredCustomersManually);
