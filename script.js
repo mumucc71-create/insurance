@@ -9877,8 +9877,6 @@ function bindApplicationUiEvents() {
   });
   safeOn(phoneConsultationCommonTemplateInput, "scroll", syncPhoneConsultationCommonHighlightScroll);
   safeOn(phoneConsultationCommonTemplateInput, "input", () => {
-    viewedPhoneConsultationMemoId = "";
-    phoneConsultationMemoList?.querySelectorAll(".is-selected").forEach((button) => button.classList.remove("is-selected"));
     const nextText = phoneConsultationCommonTemplateInput.value || "";
     phoneConsultationCommonHighlightStrokes = adjustAnchoredHighlightStrokes(
       phoneConsultationCommonHighlightStrokes,

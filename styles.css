@@ -1055,10 +1055,17 @@ body.promotion-mode .app {
   cursor: grabbing;
 }
 
-.phone-consultation-memo-button:hover,
-.phone-consultation-memo-button.is-selected {
+.phone-consultation-memo-button:hover {
   border-color: var(--accent);
   background: #f5fbf7;
+}
+
+.phone-consultation-memo-button.is-selected,
+.phone-consultation-memo-button.is-selected:hover {
+  border-color: #145747;
+  background: #267563;
+  color: #ffffff;
+  box-shadow: 0 0 0 2px rgba(38, 117, 99, 0.18);
 }
 
 .phone-consultation-memo-button.is-dragging {
