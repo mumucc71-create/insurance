@@ -270,6 +270,26 @@ function safeOn(element, type, handler, options) {
   element.addEventListener(type, handler, options);
 }
 
+function preserveScrollPosition(callback) {
+  const left = window.scrollX;
+  const top = window.scrollY;
+  const result = callback?.();
+  requestAnimationFrame(() => window.scrollTo(left, top));
+  return result;
+}
+
+function focusWithoutPageJump(element) {
+  if (!element) return;
+  const left = window.scrollX;
+  const top = window.scrollY;
+  try {
+    element.focus({ preventScroll: true });
+  } catch {
+    element.focus();
+    window.scrollTo(left, top);
+  }
+}
+
 function getSessionAuthName(session = currentSession) {
   const user = session?.user ?? {};
   const metadata = user.user_metadata ?? user.raw_user_meta_data ?? {};
@@ -1244,7 +1264,7 @@ function appendPhoneConsultationMemoContent(content, message = "내용을 메모
   phoneConsultationMemoInput.value = current.trim()
     ? `${current.replace(/\s+$/, "")}\n\n${template}`
     : template;
-  phoneConsultationMemoInput.focus();
+  focusWithoutPageJump(phoneConsultationMemoInput);
   phoneConsultationMemoInput.selectionStart = phoneConsultationMemoInput.value.length;
   phoneConsultationMemoInput.selectionEnd = phoneConsultationMemoInput.value.length;
   savePhoneConsultationDraftForCustomer();
@@ -1505,26 +1525,28 @@ function reorderPhoneConsultationMemos(draggedId, targetId = "", targetGroup = "
 }
 
 function loadPhoneConsultationById(id) {
-  const memo = recoverPhoneConsultationMemosToCurrentAccount().find((item) => item.id === id);
-  if (!memo) {
-    showPhoneConsultationStatus("저장된 메모를 찾지 못했습니다.");
-    return;
-  }
-  if (phoneConsultationCommonTemplateInput) {
-    phoneConsultationCommonTemplateInput.value = memo.content || "";
-  }
-  setStoredPhoneConsultationCommonTemplate(memo.content || "");
-  if (memo.source === "common-template") {
-    appendPhoneConsultationMemoContent(memo.content, `"${memo.title || "공통 양식"}" 내용을 아래에 추가했습니다.`);
-    renderPhoneConsultationMemoButtons(activePhoneConsultationId);
-    return;
-  }
-  activePhoneConsultationId = memo.id;
-  if (phoneConsultationTitleInput) phoneConsultationTitleInput.value = memo.title || "";
-  if (phoneConsultationMemoInput) phoneConsultationMemoInput.value = memo.content || "";
-  savePhoneConsultationDraftForCustomer();
-  renderPhoneConsultationMemoButtons(memo.id);
-  showPhoneConsultationStatus("메모를 불러왔습니다.");
+  preserveScrollPosition(() => {
+    const memo = recoverPhoneConsultationMemosToCurrentAccount().find((item) => item.id === id);
+    if (!memo) {
+      showPhoneConsultationStatus("저장된 메모를 찾지 못했습니다.");
+      return;
+    }
+    if (phoneConsultationCommonTemplateInput) {
+      phoneConsultationCommonTemplateInput.value = memo.content || "";
+    }
+    setStoredPhoneConsultationCommonTemplate(memo.content || "");
+    if (memo.source === "common-template") {
+      appendPhoneConsultationMemoContent(memo.content, `"${memo.title || "공통 양식"}" 내용을 아래에 추가했습니다.`);
+      renderPhoneConsultationMemoButtons(activePhoneConsultationId);
+      return;
+    }
+    activePhoneConsultationId = memo.id;
+    if (phoneConsultationTitleInput) phoneConsultationTitleInput.value = memo.title || "";
+    if (phoneConsultationMemoInput) phoneConsultationMemoInput.value = memo.content || "";
+    savePhoneConsultationDraftForCustomer();
+    renderPhoneConsultationMemoButtons(memo.id);
+    showPhoneConsultationStatus("메모를 불러왔습니다.");
+  });
 }
 
 function savePhoneConsultationMemo() {
@@ -8783,6 +8805,7 @@ function bindApplicationUiEvents() {
     if (event.target.closest("[data-memo-group-title]")) return;
     const button = event.target.closest("[data-memo-id]");
     if (!button) return;
+    event.preventDefault();
     loadPhoneConsultationById(button.dataset.memoId);
   });
   safeOn(phoneConsultationMemoList, "input", (event) => {
@@ -8836,9 +8859,11 @@ function bindApplicationUiEvents() {
     }, 50);
   });
   safeOn(newPhoneConsultationButton, "click", () => {
-    clearPhoneConsultationForm();
-    showPhoneConsultationStatus("새 메모를 작성할 수 있습니다.");
-    phoneConsultationTitleInput?.focus();
+    preserveScrollPosition(() => {
+      clearPhoneConsultationForm();
+      showPhoneConsultationStatus("새 메모를 작성할 수 있습니다.");
+      focusWithoutPageJump(phoneConsultationTitleInput);
+    });
   });
   safeOn(deletePhoneConsultationButton, "click", deletePhoneConsultationMemo);
   safeOn(savePhoneConsultationCommonTemplateButton, "click", savePhoneConsultationCommonTemplate);
