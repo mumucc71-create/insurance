@@ -829,6 +829,72 @@ body.promotion-mode .app {
   margin-bottom: 10px;
 }
 
+.phone-consultation-memo-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 7px;
+  font-weight: 700;
+}
+
+.phone-consultation-highlight-tools {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.phone-consultation-highlight-tools button {
+  min-height: 32px;
+}
+
+.phone-consultation-highlight-toggle,
+.phone-consultation-highlight-clear {
+  width: auto;
+  padding: 5px 10px;
+  font-size: 0.82rem;
+}
+
+.phone-consultation-highlight-toggle.is-active {
+  border-color: #b08a00;
+  background: #ffe45c;
+  color: #342900;
+}
+
+.phone-consultation-highlight-swatch {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px !important;
+  padding: 0;
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  background: var(--highlight-color);
+  box-shadow: 0 0 0 1px var(--line);
+}
+
+.phone-consultation-highlight-swatch[data-highlight-color="#ffe45c"] {
+  --highlight-color: #ffe45c;
+}
+
+.phone-consultation-highlight-swatch[data-highlight-color="#74e39a"] {
+  --highlight-color: #74e39a;
+}
+
+.phone-consultation-highlight-swatch[data-highlight-color="#ff8fbd"] {
+  --highlight-color: #ff8fbd;
+}
+
+.phone-consultation-highlight-swatch.is-selected {
+  box-shadow: 0 0 0 2px var(--accent-dark);
+}
+
+.phone-consultation-memo-canvas-wrap {
+  position: relative;
+}
+
 .phone-consultation-saved-memos {
   margin-bottom: 16px;
 }
@@ -870,7 +936,39 @@ body.promotion-mode .app {
 }
 
 #phoneConsultationMemoInput {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 100%;
   min-height: 520px;
+  margin: 0;
+  resize: vertical;
+}
+
+#phoneConsultationHighlightCanvas {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  touch-action: none;
+}
+
+#phoneConsultationHighlightCanvas.is-active {
+  pointer-events: auto;
+  cursor: crosshair;
+}
+
+@media (max-width: 720px) {
+  .phone-consultation-memo-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .phone-consultation-highlight-tools {
+    justify-content: flex-start;
+  }
 }
 
 .phone-consultation-memo-column-buttons {
@@ -906,8 +1004,7 @@ body.promotion-mode .app {
   cursor: grabbing;
 }
 
-.phone-consultation-memo-button:hover,
-.phone-consultation-memo-button.is-selected {
+.phone-consultation-memo-button:hover {
   border-color: var(--accent);
   background: #f5fbf7;
 }

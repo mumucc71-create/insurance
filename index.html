@@ -242,10 +242,22 @@
               <span>제목</span>
               <input id="phoneConsultationTitleInput" type="text" placeholder="예: 이광천님 상담 메모" autocomplete="off" />
             </label>
-            <label class="phone-consultation-memo-field">
-              <span>메모</span>
-              <textarea id="phoneConsultationMemoInput" rows="28" placeholder="전화상담 내용을 입력하세요"></textarea>
-            </label>
+            <div class="phone-consultation-memo-field">
+              <div class="phone-consultation-memo-heading">
+                <span>메모</span>
+                <div class="phone-consultation-highlight-tools" aria-label="메모 형광펜 도구">
+                  <button id="phoneConsultationHighlightButton" class="secondary-button phone-consultation-highlight-toggle" type="button" aria-pressed="false">형광펜</button>
+                  <button class="phone-consultation-highlight-swatch is-selected" type="button" data-highlight-color="#ffe45c" aria-label="노란색 형광펜" title="노란색"></button>
+                  <button class="phone-consultation-highlight-swatch" type="button" data-highlight-color="#74e39a" aria-label="초록색 형광펜" title="초록색"></button>
+                  <button class="phone-consultation-highlight-swatch" type="button" data-highlight-color="#ff8fbd" aria-label="분홍색 형광펜" title="분홍색"></button>
+                  <button id="clearPhoneConsultationHighlightButton" class="secondary-button phone-consultation-highlight-clear" type="button">형광펜 지우기</button>
+                </div>
+              </div>
+              <div id="phoneConsultationMemoCanvasWrap" class="phone-consultation-memo-canvas-wrap">
+                <textarea id="phoneConsultationMemoInput" rows="28" placeholder="전화상담 내용을 입력하세요"></textarea>
+                <canvas id="phoneConsultationHighlightCanvas" aria-label="메모 형광펜 그리기 영역"></canvas>
+              </div>
+            </div>
             <div class="manager-actions">
               <button id="insertPhoneConsultationCommonTemplateButton" class="secondary-button" type="button">공통 양식 넣기</button>
               <button id="savePhoneConsultationButton" type="button">저장</button>
@@ -826,7 +838,7 @@
     <script src="./supabase-config.js?v=20260625-insurer-type-colors"></script>
     <script src="./disease-code-db.js?v=20260713-universe-disclosure"></script>
     <script src="./auth-boot.js?v=20260716-promotion-nav"></script>
-    <script src="./script.js?v=20260723-phone-memo-scroll-2"></script>
+    <script src="./script.js?v=20260723-phone-memo-highlighter"></script>
     <script defer src="./pdf.min.js?v=3.11.174"></script>
   </body>
 </html>
