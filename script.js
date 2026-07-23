@@ -1203,6 +1203,53 @@ function setStoredPhoneConsultationOrders(orders) {
   localStorage.setItem(getScopedStorageKey(phoneConsultationOrderStorageKey), JSON.stringify(orders && typeof orders === "object" ? orders : {}));
 }
 
+const phoneConsultationGlobalLayoutKey = "__global_phone_memo_layout__";
+
+function getPhoneConsultationLayoutScore(record) {
+  if (!record || typeof record !== "object") return -1;
+  const ids = Array.isArray(record.ids) ? record.ids.length : 0;
+  const groups = record.groups && typeof record.groups === "object" && !Array.isArray(record.groups)
+    ? Object.keys(record.groups).length
+    : 0;
+  const titles = record.titles && typeof record.titles === "object" && !Array.isArray(record.titles)
+    ? Object.keys(record.titles).length
+    : 0;
+  return (groups * 100) + (ids * 10) + titles;
+}
+
+function getPhoneConsultationLayoutRecord() {
+  const orders = getStoredPhoneConsultationOrders();
+  const globalRecord = orders[phoneConsultationGlobalLayoutKey];
+  if (globalRecord && getPhoneConsultationLayoutScore(globalRecord) > 0) {
+    return globalRecord;
+  }
+
+  const recoveredRecord = Object.entries(orders)
+    .filter(([key, record]) => key !== phoneConsultationGlobalLayoutKey && record && typeof record === "object")
+    .sort(([, left], [, right]) => {
+      const scoreDifference = getPhoneConsultationLayoutScore(right) - getPhoneConsultationLayoutScore(left);
+      if (scoreDifference) return scoreDifference;
+      return new Date(right.updatedAt || 0) - new Date(left.updatedAt || 0);
+    })[0]?.[1];
+
+  if (!recoveredRecord) return {};
+
+  const migratedRecord = {
+    ids: Array.isArray(recoveredRecord.ids) ? [...recoveredRecord.ids] : [],
+    groups: recoveredRecord.groups && typeof recoveredRecord.groups === "object" && !Array.isArray(recoveredRecord.groups)
+      ? { ...recoveredRecord.groups }
+      : {},
+    titles: recoveredRecord.titles && typeof recoveredRecord.titles === "object" && !Array.isArray(recoveredRecord.titles)
+      ? { ...recoveredRecord.titles }
+      : {},
+    updatedAt: new Date().toISOString(),
+  };
+  orders[phoneConsultationGlobalLayoutKey] = migratedRecord;
+  setStoredPhoneConsultationOrders(orders);
+  scheduleCloudSync();
+  return migratedRecord;
+}
+
 function getPhoneConsultationHighlightContext() {
   return phoneConsultationHighlightCanvas?.getContext("2d") || null;
 }
@@ -1933,29 +1980,25 @@ function restorePhoneConsultationDraftForCustomer(customerId = savedCustomerSele
   renderPhoneConsultationMemoButtons(viewedPhoneConsultationMemoId);
 }
 
-function getPhoneConsultationOrderForCustomer(customerId = savedCustomerSelect?.value || activePhoneConsultationCustomerId || "") {
-  const key = getPhoneConsultationCustomerKey(customerId);
-  const order = getStoredPhoneConsultationOrders()[key]?.ids;
+function getPhoneConsultationOrderForCustomer() {
+  const order = getPhoneConsultationLayoutRecord().ids;
   return Array.isArray(order) ? order : [];
 }
 
-function getPhoneConsultationGroupOverridesForCustomer(customerId = savedCustomerSelect?.value || activePhoneConsultationCustomerId || "") {
-  const key = getPhoneConsultationCustomerKey(customerId);
-  const groups = getStoredPhoneConsultationOrders()[key]?.groups;
+function getPhoneConsultationGroupOverridesForCustomer() {
+  const groups = getPhoneConsultationLayoutRecord().groups;
   return groups && typeof groups === "object" && !Array.isArray(groups) ? groups : {};
 }
 
-function getPhoneConsultationGroupTitlesForCustomer(customerId = savedCustomerSelect?.value || activePhoneConsultationCustomerId || "") {
-  const key = getPhoneConsultationCustomerKey(customerId);
-  const titles = getStoredPhoneConsultationOrders()[key]?.titles;
+function getPhoneConsultationGroupTitlesForCustomer() {
+  const titles = getPhoneConsultationLayoutRecord().titles;
   return titles && typeof titles === "object" && !Array.isArray(titles) ? titles : {};
 }
 
-function savePhoneConsultationOrderForCustomer(ids, customerId = savedCustomerSelect?.value || activePhoneConsultationCustomerId || "") {
-  const key = getPhoneConsultationCustomerKey(customerId);
+function savePhoneConsultationOrderForCustomer(ids) {
   const orders = getStoredPhoneConsultationOrders();
-  const previous = orders[key] && typeof orders[key] === "object" ? orders[key] : {};
-  orders[key] = {
+  const previous = getPhoneConsultationLayoutRecord();
+  orders[phoneConsultationGlobalLayoutKey] = {
     ids: Array.isArray(ids) ? ids : [],
     groups: previous.groups && typeof previous.groups === "object" && !Array.isArray(previous.groups) ? previous.groups : {},
     titles: previous.titles && typeof previous.titles === "object" && !Array.isArray(previous.titles) ? previous.titles : {},
@@ -1964,11 +2007,10 @@ function savePhoneConsultationOrderForCustomer(ids, customerId = savedCustomerSe
   setStoredPhoneConsultationOrders(orders);
 }
 
-function savePhoneConsultationLayoutForCustomer(ids, groups, customerId = savedCustomerSelect?.value || activePhoneConsultationCustomerId || "") {
-  const key = getPhoneConsultationCustomerKey(customerId);
+function savePhoneConsultationLayoutForCustomer(ids, groups) {
   const orders = getStoredPhoneConsultationOrders();
-  const previous = orders[key] && typeof orders[key] === "object" ? orders[key] : {};
-  orders[key] = {
+  const previous = getPhoneConsultationLayoutRecord();
+  orders[phoneConsultationGlobalLayoutKey] = {
     ids: Array.isArray(ids) ? ids : [],
     groups: groups && typeof groups === "object" && !Array.isArray(groups) ? groups : {},
     titles: previous.titles && typeof previous.titles === "object" && !Array.isArray(previous.titles) ? previous.titles : {},
@@ -1977,12 +2019,11 @@ function savePhoneConsultationLayoutForCustomer(ids, groups, customerId = savedC
   setStoredPhoneConsultationOrders(orders);
 }
 
-function savePhoneConsultationGroupTitleForCustomer(groupId, title, customerId = savedCustomerSelect?.value || activePhoneConsultationCustomerId || "") {
+function savePhoneConsultationGroupTitleForCustomer(groupId, title) {
   if (!["claim", "coverage", "general"].includes(groupId)) return;
-  const key = getPhoneConsultationCustomerKey(customerId);
   const orders = getStoredPhoneConsultationOrders();
-  const previous = orders[key] && typeof orders[key] === "object" ? orders[key] : {};
-  orders[key] = {
+  const previous = getPhoneConsultationLayoutRecord();
+  orders[phoneConsultationGlobalLayoutKey] = {
     ids: Array.isArray(previous.ids) ? previous.ids : [],
     groups: previous.groups && typeof previous.groups === "object" && !Array.isArray(previous.groups) ? previous.groups : {},
     titles: {
