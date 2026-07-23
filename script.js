@@ -22,8 +22,8 @@ const phoneConsultationMemoInput = document.querySelector("#phoneConsultationMem
 const phoneConsultationMemoCanvasWrap = document.querySelector("#phoneConsultationMemoCanvasWrap");
 const phoneConsultationHighlightCanvas = document.querySelector("#phoneConsultationHighlightCanvas");
 const phoneConsultationHighlightButton = document.querySelector("#phoneConsultationHighlightButton");
-const clearPhoneConsultationHighlightButton = document.querySelector("#clearPhoneConsultationHighlightButton");
-const phoneConsultationHighlightSwatches = document.querySelectorAll("[data-highlight-color]");
+const phoneConsultationEraserButton = document.querySelector("#phoneConsultationEraserButton");
+const phoneConsultationHighlightSwatches = document.querySelectorAll("#phoneConsultationHighlightTools [data-highlight-color]");
 const phoneConsultationStatus = document.querySelector("#phoneConsultationStatus");
 const savePhoneConsultationButton = document.querySelector("#savePhoneConsultationButton");
 const newPhoneConsultationButton = document.querySelector("#newPhoneConsultationButton");
@@ -31,6 +31,11 @@ const deletePhoneConsultationButton = document.querySelector("#deletePhoneConsul
 const phoneConsultationCommonTemplateInput = document.querySelector("#phoneConsultationCommonTemplateInput");
 const savePhoneConsultationCommonTemplateButton = document.querySelector("#savePhoneConsultationCommonTemplateButton");
 const insertPhoneConsultationCommonTemplateButton = document.querySelector("#insertPhoneConsultationCommonTemplateButton");
+const phoneConsultationCommonCanvasWrap = document.querySelector("#phoneConsultationCommonCanvasWrap");
+const phoneConsultationCommonHighlightCanvas = document.querySelector("#phoneConsultationCommonHighlightCanvas");
+const phoneConsultationCommonHighlightButton = document.querySelector("#phoneConsultationCommonHighlightButton");
+const phoneConsultationCommonEraserButton = document.querySelector("#phoneConsultationCommonEraserButton");
+const phoneConsultationCommonHighlightSwatches = document.querySelectorAll("#phoneConsultationCommonHighlightTools [data-highlight-color]");
 const promotionChannelInput = document.querySelector("#promotionChannelInput");
 const promotionToneInput = document.querySelector("#promotionToneInput");
 const promotionLengthInput = document.querySelector("#promotionLengthInput");
@@ -213,6 +218,7 @@ const localSessionStorageKey = "insuranceDisclosureLocalSession";
 const designManagerStorageKey = "insuranceDesignManagers";
 const phoneConsultationStorageKey = "insurancePhoneConsultationMemos";
 const phoneConsultationCommonTemplateStorageKey = "insurancePhoneConsultationCommonTemplate";
+const phoneConsultationCommonTemplateHighlightStorageKey = "insurancePhoneConsultationCommonTemplateHighlight";
 const phoneConsultationDraftStorageKey = "insurancePhoneConsultationDrafts";
 const phoneConsultationOrderStorageKey = "insurancePhoneConsultationOrders";
 const promotionPostsStorageKey = "insurancePromotionPosts";
@@ -227,14 +233,27 @@ const uiSessionStorageKey = "insuranceDisclosureUiSession";
 const customerManagerCollapsedStorageKey = "insuranceCustomerManagerCollapsed";
 let activePhoneConsultationId = "";
 let activePhoneConsultationCustomerId = "";
+let viewedPhoneConsultationMemoId = "";
 let draggedPhoneConsultationMemoId = "";
 let phoneConsultationMemoDragMoved = false;
 let phoneConsultationHighlightMode = false;
 let phoneConsultationHighlightDrawing = false;
 let phoneConsultationHighlightColor = "#ffe45c";
 let phoneConsultationHighlightLastPoint = null;
+let phoneConsultationHighlightStartPoint = null;
+let phoneConsultationHighlightSnapshot = null;
 let phoneConsultationHighlightImage = "";
 let phoneConsultationHighlightResizeTimer = null;
+let phoneConsultationHighlightEraseMode = false;
+let phoneConsultationCommonHighlightMode = false;
+let phoneConsultationCommonHighlightDrawing = false;
+let phoneConsultationCommonHighlightColor = "#ffe45c";
+let phoneConsultationCommonHighlightLastPoint = null;
+let phoneConsultationCommonHighlightStartPoint = null;
+let phoneConsultationCommonHighlightSnapshot = null;
+let phoneConsultationCommonHighlightImage = "";
+let phoneConsultationCommonHighlightResizeTimer = null;
+let phoneConsultationCommonHighlightEraseMode = false;
 let autoSaveTimer = null;
 let cloudSyncTimer = null;
 let supabaseClient = null;
@@ -1079,6 +1098,17 @@ function setStoredPhoneConsultationCommonTemplate(content) {
   localStorage.setItem(getScopedStorageKey(phoneConsultationCommonTemplateStorageKey), JSON.stringify(String(content ?? "")));
 }
 
+function getStoredPhoneConsultationCommonHighlight() {
+  return String(readJsonStorage(getScopedStorageKey(phoneConsultationCommonTemplateHighlightStorageKey), "") ?? "");
+}
+
+function setStoredPhoneConsultationCommonHighlight(imageDataUrl) {
+  localStorage.setItem(
+    getScopedStorageKey(phoneConsultationCommonTemplateHighlightStorageKey),
+    JSON.stringify(String(imageDataUrl || "")),
+  );
+}
+
 function getPhoneConsultationCustomerKey(customerId = activePhoneConsultationCustomerId || savedCustomerSelect?.value || "") {
   return customerId || "__new_customer__";
 }
@@ -1162,11 +1192,19 @@ function setPhoneConsultationHighlightMode(enabled) {
   phoneConsultationHighlightMode = Boolean(enabled);
   phoneConsultationHighlightDrawing = false;
   phoneConsultationHighlightLastPoint = null;
+  phoneConsultationHighlightStartPoint = null;
+  phoneConsultationHighlightSnapshot = null;
   phoneConsultationHighlightCanvas?.classList.toggle("is-active", phoneConsultationHighlightMode);
+  phoneConsultationMemoCanvasWrap?.classList.toggle("is-highlight-mode", phoneConsultationHighlightMode);
   phoneConsultationHighlightButton?.classList.toggle("is-active", phoneConsultationHighlightMode);
   phoneConsultationHighlightButton?.setAttribute("aria-pressed", String(phoneConsultationHighlightMode));
   if (phoneConsultationHighlightButton) {
     phoneConsultationHighlightButton.textContent = phoneConsultationHighlightMode ? "형광펜 끄기" : "형광펜";
+  }
+  if (!phoneConsultationHighlightMode && phoneConsultationHighlightEraseMode) {
+    phoneConsultationHighlightEraseMode = false;
+    phoneConsultationEraserButton?.classList.remove("is-active");
+    phoneConsultationEraserButton?.setAttribute("aria-pressed", "false");
   }
   if (phoneConsultationHighlightMode) sizePhoneConsultationHighlightCanvas();
 }
@@ -1183,9 +1221,10 @@ function drawPhoneConsultationHighlight(from, to) {
   const context = getPhoneConsultationHighlightContext();
   if (!context || !from || !to) return;
   context.save();
-  context.globalAlpha = 0.38;
-  context.strokeStyle = phoneConsultationHighlightColor;
-  context.lineWidth = 22;
+  context.globalCompositeOperation = phoneConsultationHighlightEraseMode ? "destination-out" : "source-over";
+  context.globalAlpha = phoneConsultationHighlightEraseMode ? 1 : 0.38;
+  context.strokeStyle = phoneConsultationHighlightEraseMode ? "#000000" : phoneConsultationHighlightColor;
+  context.lineWidth = phoneConsultationHighlightEraseMode ? 34 : 22;
   context.lineCap = "round";
   context.lineJoin = "round";
   context.beginPath();
@@ -1200,16 +1239,28 @@ function startPhoneConsultationHighlight(event) {
   event.preventDefault();
   sizePhoneConsultationHighlightCanvas();
   phoneConsultationHighlightDrawing = true;
-  phoneConsultationHighlightLastPoint = getPhoneConsultationHighlightPoint(event);
+  phoneConsultationHighlightStartPoint = getPhoneConsultationHighlightPoint(event);
+  phoneConsultationHighlightLastPoint = phoneConsultationHighlightStartPoint;
+  const context = getPhoneConsultationHighlightContext();
+  phoneConsultationHighlightSnapshot = context?.getImageData(
+    0,
+    0,
+    phoneConsultationHighlightCanvas.width,
+    phoneConsultationHighlightCanvas.height,
+  ) || null;
   phoneConsultationHighlightCanvas.setPointerCapture?.(event.pointerId);
-  drawPhoneConsultationHighlight(phoneConsultationHighlightLastPoint, phoneConsultationHighlightLastPoint);
+  drawPhoneConsultationHighlight(phoneConsultationHighlightStartPoint, phoneConsultationHighlightLastPoint);
 }
 
 function continuePhoneConsultationHighlight(event) {
   if (!phoneConsultationHighlightDrawing) return;
   event.preventDefault();
   const point = getPhoneConsultationHighlightPoint(event);
-  drawPhoneConsultationHighlight(phoneConsultationHighlightLastPoint, point);
+  const context = getPhoneConsultationHighlightContext();
+  if (context && phoneConsultationHighlightSnapshot) {
+    context.putImageData(phoneConsultationHighlightSnapshot, 0, 0);
+  }
+  drawPhoneConsultationHighlight(phoneConsultationHighlightStartPoint, point);
   phoneConsultationHighlightLastPoint = point;
 }
 
@@ -1217,21 +1268,182 @@ function finishPhoneConsultationHighlight(event) {
   if (!phoneConsultationHighlightDrawing) return;
   phoneConsultationHighlightDrawing = false;
   phoneConsultationHighlightLastPoint = null;
+  phoneConsultationHighlightStartPoint = null;
+  phoneConsultationHighlightSnapshot = null;
   phoneConsultationHighlightCanvas.releasePointerCapture?.(event.pointerId);
   phoneConsultationHighlightImage = phoneConsultationHighlightCanvas.toDataURL("image/png");
   savePhoneConsultationDraftForCustomer();
-  showPhoneConsultationStatus("형광펜 표시를 자동 저장했습니다.");
+  showPhoneConsultationStatus(phoneConsultationHighlightEraseMode
+    ? "선택한 형광펜 표시를 지웠습니다."
+    : "형광펜 표시를 자동 저장했습니다.");
 }
 
-function clearPhoneConsultationHighlight() {
-  const context = getPhoneConsultationHighlightContext();
-  if (context && phoneConsultationHighlightCanvas && phoneConsultationMemoCanvasWrap) {
-    const rect = phoneConsultationMemoCanvasWrap.getBoundingClientRect();
-    context.clearRect(0, 0, rect.width, rect.height);
+function setPhoneConsultationHighlightEraser(enabled) {
+  phoneConsultationHighlightEraseMode = Boolean(enabled);
+  phoneConsultationEraserButton?.classList.toggle("is-active", phoneConsultationHighlightEraseMode);
+  phoneConsultationEraserButton?.setAttribute("aria-pressed", String(phoneConsultationHighlightEraseMode));
+  if (phoneConsultationHighlightEraseMode && !phoneConsultationHighlightMode) {
+    setPhoneConsultationHighlightMode(true);
   }
-  phoneConsultationHighlightImage = "";
+  showPhoneConsultationStatus(phoneConsultationHighlightEraseMode
+    ? "지울 부분을 직선으로 그어주세요."
+    : "형광펜 색상을 선택해 직선으로 그어주세요.");
+}
+
+function getPhoneConsultationCommonHighlightContext() {
+  return phoneConsultationCommonHighlightCanvas?.getContext("2d") || null;
+}
+
+function capturePhoneConsultationCommonHighlight() {
+  if (!phoneConsultationCommonHighlightCanvas || !phoneConsultationCommonHighlightImage) return "";
+  try {
+    return phoneConsultationCommonHighlightCanvas.toDataURL("image/png");
+  } catch {
+    return "";
+  }
+}
+
+function sizePhoneConsultationCommonHighlightCanvas(imageDataUrl = phoneConsultationCommonHighlightImage) {
+  if (!phoneConsultationCommonHighlightCanvas || !phoneConsultationCommonCanvasWrap) return;
+  const rect = phoneConsultationCommonCanvasWrap.getBoundingClientRect();
+  if (!rect.width || !rect.height) return;
+
+  const pixelRatio = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
+  const width = Math.round(rect.width * pixelRatio);
+  const height = Math.round(rect.height * pixelRatio);
+  if (phoneConsultationCommonHighlightCanvas.width === width && phoneConsultationCommonHighlightCanvas.height === height) return;
+
+  phoneConsultationCommonHighlightCanvas.width = width;
+  phoneConsultationCommonHighlightCanvas.height = height;
+  const context = getPhoneConsultationCommonHighlightContext();
+  if (!context) return;
+  context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+
+  if (!imageDataUrl) return;
+  const image = new Image();
+  image.onload = () => {
+    context.drawImage(image, 0, 0, rect.width, rect.height);
+    phoneConsultationCommonHighlightImage = phoneConsultationCommonHighlightCanvas.toDataURL("image/png");
+  };
+  image.src = imageDataUrl;
+}
+
+function restorePhoneConsultationCommonHighlight(imageDataUrl = "") {
+  phoneConsultationCommonHighlightImage = String(imageDataUrl || "");
+  sizePhoneConsultationCommonHighlightCanvas("");
+  const context = getPhoneConsultationCommonHighlightContext();
+  if (!context || !phoneConsultationCommonHighlightCanvas || !phoneConsultationCommonCanvasWrap) return;
+  const rect = phoneConsultationCommonCanvasWrap.getBoundingClientRect();
+  context.clearRect(0, 0, rect.width, rect.height);
+  if (!phoneConsultationCommonHighlightImage) return;
+
+  const image = new Image();
+  image.onload = () => {
+    context.drawImage(image, 0, 0, rect.width, rect.height);
+  };
+  image.src = phoneConsultationCommonHighlightImage;
+}
+
+function setPhoneConsultationCommonHighlightMode(enabled) {
+  phoneConsultationCommonHighlightMode = Boolean(enabled);
+  phoneConsultationCommonHighlightDrawing = false;
+  phoneConsultationCommonHighlightLastPoint = null;
+  phoneConsultationCommonHighlightStartPoint = null;
+  phoneConsultationCommonHighlightSnapshot = null;
+  phoneConsultationCommonHighlightCanvas?.classList.toggle("is-active", phoneConsultationCommonHighlightMode);
+  phoneConsultationCommonCanvasWrap?.classList.toggle("is-highlight-mode", phoneConsultationCommonHighlightMode);
+  phoneConsultationCommonHighlightButton?.classList.toggle("is-active", phoneConsultationCommonHighlightMode);
+  phoneConsultationCommonHighlightButton?.setAttribute("aria-pressed", String(phoneConsultationCommonHighlightMode));
+  if (phoneConsultationCommonHighlightButton) {
+    phoneConsultationCommonHighlightButton.textContent = phoneConsultationCommonHighlightMode ? "형광펜 끄기" : "형광펜";
+  }
+  if (!phoneConsultationCommonHighlightMode && phoneConsultationCommonHighlightEraseMode) {
+    phoneConsultationCommonHighlightEraseMode = false;
+    phoneConsultationCommonEraserButton?.classList.remove("is-active");
+    phoneConsultationCommonEraserButton?.setAttribute("aria-pressed", "false");
+  }
+  if (phoneConsultationCommonHighlightMode) sizePhoneConsultationCommonHighlightCanvas();
+}
+
+function getPhoneConsultationCommonHighlightPoint(event) {
+  const rect = phoneConsultationCommonHighlightCanvas.getBoundingClientRect();
+  return {
+    x: Math.max(0, Math.min(rect.width, event.clientX - rect.left)),
+    y: Math.max(0, Math.min(rect.height, event.clientY - rect.top)),
+  };
+}
+
+function drawPhoneConsultationCommonHighlight(from, to) {
+  const context = getPhoneConsultationCommonHighlightContext();
+  if (!context || !from || !to) return;
+  context.save();
+  context.globalCompositeOperation = phoneConsultationCommonHighlightEraseMode ? "destination-out" : "source-over";
+  context.globalAlpha = phoneConsultationCommonHighlightEraseMode ? 1 : 0.38;
+  context.strokeStyle = phoneConsultationCommonHighlightEraseMode ? "#000000" : phoneConsultationCommonHighlightColor;
+  context.lineWidth = phoneConsultationCommonHighlightEraseMode ? 34 : 22;
+  context.lineCap = "round";
+  context.lineJoin = "round";
+  context.beginPath();
+  context.moveTo(from.x, from.y);
+  context.lineTo(to.x, to.y);
+  context.stroke();
+  context.restore();
+}
+
+function startPhoneConsultationCommonHighlight(event) {
+  if (!phoneConsultationCommonHighlightMode) return;
+  event.preventDefault();
+  sizePhoneConsultationCommonHighlightCanvas();
+  phoneConsultationCommonHighlightDrawing = true;
+  phoneConsultationCommonHighlightStartPoint = getPhoneConsultationCommonHighlightPoint(event);
+  phoneConsultationCommonHighlightLastPoint = phoneConsultationCommonHighlightStartPoint;
+  const context = getPhoneConsultationCommonHighlightContext();
+  phoneConsultationCommonHighlightSnapshot = context?.getImageData(
+    0,
+    0,
+    phoneConsultationCommonHighlightCanvas.width,
+    phoneConsultationCommonHighlightCanvas.height,
+  ) || null;
+  phoneConsultationCommonHighlightCanvas.setPointerCapture?.(event.pointerId);
+  drawPhoneConsultationCommonHighlight(phoneConsultationCommonHighlightStartPoint, phoneConsultationCommonHighlightLastPoint);
+}
+
+function continuePhoneConsultationCommonHighlight(event) {
+  if (!phoneConsultationCommonHighlightDrawing) return;
+  event.preventDefault();
+  const point = getPhoneConsultationCommonHighlightPoint(event);
+  const context = getPhoneConsultationCommonHighlightContext();
+  if (context && phoneConsultationCommonHighlightSnapshot) {
+    context.putImageData(phoneConsultationCommonHighlightSnapshot, 0, 0);
+  }
+  drawPhoneConsultationCommonHighlight(phoneConsultationCommonHighlightStartPoint, point);
+  phoneConsultationCommonHighlightLastPoint = point;
+}
+
+function finishPhoneConsultationCommonHighlight(event) {
+  if (!phoneConsultationCommonHighlightDrawing) return;
+  phoneConsultationCommonHighlightDrawing = false;
+  phoneConsultationCommonHighlightLastPoint = null;
+  phoneConsultationCommonHighlightStartPoint = null;
+  phoneConsultationCommonHighlightSnapshot = null;
+  phoneConsultationCommonHighlightCanvas.releasePointerCapture?.(event.pointerId);
+  phoneConsultationCommonHighlightImage = phoneConsultationCommonHighlightCanvas.toDataURL("image/png");
   savePhoneConsultationDraftForCustomer();
-  showPhoneConsultationStatus("형광펜 표시를 모두 지웠습니다.");
+  showPhoneConsultationStatus(phoneConsultationCommonHighlightEraseMode
+    ? "선택한 형광펜 표시를 지웠습니다."
+    : "공통 메모 형광펜 표시를 자동 저장했습니다.");
+}
+
+function setPhoneConsultationCommonHighlightEraser(enabled) {
+  phoneConsultationCommonHighlightEraseMode = Boolean(enabled);
+  phoneConsultationCommonEraserButton?.classList.toggle("is-active", phoneConsultationCommonHighlightEraseMode);
+  phoneConsultationCommonEraserButton?.setAttribute("aria-pressed", String(phoneConsultationCommonHighlightEraseMode));
+  if (phoneConsultationCommonHighlightEraseMode && !phoneConsultationCommonHighlightMode) {
+    setPhoneConsultationCommonHighlightMode(true);
+  }
+  showPhoneConsultationStatus(phoneConsultationCommonHighlightEraseMode
+    ? "위 메모에서 지울 부분을 직선으로 그어주세요."
+    : "위 메모에서 형광펜 색상을 선택해 직선으로 그어주세요.");
 }
 
 function mergePhoneConsultationRecordMap(...maps) {
@@ -1257,7 +1469,9 @@ function savePhoneConsultationDraftForCustomer(customerId = activePhoneConsultat
     memo: phoneConsultationMemoInput?.value ?? "",
     highlightImage: phoneConsultationHighlightImage,
     commonTemplate: phoneConsultationCommonTemplateInput?.value ?? getStoredPhoneConsultationCommonTemplate(),
+    commonHighlightImage: phoneConsultationCommonHighlightImage,
     activeMemoId: activePhoneConsultationId,
+    viewedMemoId: viewedPhoneConsultationMemoId,
     updatedAt: new Date().toISOString(),
   };
   setStoredPhoneConsultationDrafts(drafts);
@@ -1269,6 +1483,7 @@ function restorePhoneConsultationDraftForCustomer(customerId = savedCustomerSele
   activePhoneConsultationCustomerId = key;
   if (!draft) {
     activePhoneConsultationId = "";
+    viewedPhoneConsultationMemoId = "";
     if (phoneConsultationTitleInput) phoneConsultationTitleInput.value = "";
     if (phoneConsultationMemoInput) phoneConsultationMemoInput.value = "";
     restorePhoneConsultationHighlight("");
@@ -1278,11 +1493,13 @@ function restorePhoneConsultationDraftForCustomer(customerId = savedCustomerSele
   }
 
   activePhoneConsultationId = draft.activeMemoId || "";
+  viewedPhoneConsultationMemoId = draft.viewedMemoId || "";
   if (phoneConsultationTitleInput) phoneConsultationTitleInput.value = draft.title || "";
   if (phoneConsultationMemoInput) phoneConsultationMemoInput.value = draft.memo || "";
   restorePhoneConsultationHighlight(draft.highlightImage || "");
   if (phoneConsultationCommonTemplateInput) phoneConsultationCommonTemplateInput.value = draft.commonTemplate || getStoredPhoneConsultationCommonTemplate();
-  renderPhoneConsultationMemoButtons(activePhoneConsultationId);
+  restorePhoneConsultationCommonHighlight(draft.commonHighlightImage || getStoredPhoneConsultationCommonHighlight());
+  renderPhoneConsultationMemoButtons(viewedPhoneConsultationMemoId);
 }
 
 function getPhoneConsultationOrderForCustomer(customerId = savedCustomerSelect?.value || activePhoneConsultationCustomerId || "") {
@@ -1350,6 +1567,7 @@ function renderPhoneConsultationCommonTemplate() {
   if (phoneConsultationCommonTemplateInput) {
     phoneConsultationCommonTemplateInput.value = getStoredPhoneConsultationCommonTemplate();
   }
+  restorePhoneConsultationCommonHighlight(getStoredPhoneConsultationCommonHighlight());
 }
 
 function getPhoneConsultationTemplateButtonTitle(content) {
@@ -1359,7 +1577,7 @@ function getPhoneConsultationTemplateButtonTitle(content) {
     .find(Boolean) || "";
 }
 
-function savePhoneConsultationCommonTemplateAsMemo(content) {
+function savePhoneConsultationCommonTemplateAsMemo(content, highlightImage = "") {
   const title = getPhoneConsultationTemplateButtonTitle(content);
   if (!title) return { saved: false, reason: "empty-title" };
 
@@ -1373,6 +1591,7 @@ function savePhoneConsultationCommonTemplateAsMemo(content) {
   if (memo) {
     memo.title = title;
     memo.content = content;
+    memo.highlightImage = highlightImage;
     memo.source = "common-template";
     memo.updatedAt = now;
   } else {
@@ -1380,6 +1599,7 @@ function savePhoneConsultationCommonTemplateAsMemo(content) {
       id: `phone-template-${Date.now()}`,
       title,
       content,
+      highlightImage,
       source: "common-template",
       sortOrder: getNextPhoneConsultationSortOrder(memos),
       createdAt: now,
@@ -1393,8 +1613,9 @@ function savePhoneConsultationCommonTemplateAsMemo(content) {
 function savePhoneConsultationCommonTemplate() {
   const content = phoneConsultationCommonTemplateInput?.value ?? "";
   setStoredPhoneConsultationCommonTemplate(content);
+  setStoredPhoneConsultationCommonHighlight(phoneConsultationCommonHighlightImage);
   savePhoneConsultationDraftForCustomer();
-  const result = savePhoneConsultationCommonTemplateAsMemo(content);
+  const result = savePhoneConsultationCommonTemplateAsMemo(content, phoneConsultationCommonHighlightImage);
   renderPhoneConsultationMemoButtons();
   scheduleCloudSync();
 
@@ -1574,7 +1795,7 @@ function getPhoneConsultationMemoGroups(memos, customerId = savedCustomerSelect?
   ];
 }
 
-function renderPhoneConsultationMemoButtons(selectedId = activePhoneConsultationId) {
+function renderPhoneConsultationMemoButtons(selectedId = viewedPhoneConsultationMemoId) {
   if (!phoneConsultationMemoList) return;
   const memos = getOrderedPhoneConsultationMemos();
   phoneConsultationMemoList.innerHTML = "";
@@ -1643,6 +1864,7 @@ function renderPhoneConsultationMemoButtons(selectedId = activePhoneConsultation
 
 function clearPhoneConsultationForm() {
   activePhoneConsultationId = "";
+  viewedPhoneConsultationMemoId = "";
   if (phoneConsultationTitleInput) phoneConsultationTitleInput.value = "";
   if (phoneConsultationMemoInput) phoneConsultationMemoInput.value = "";
   restorePhoneConsultationHighlight("");
@@ -1679,7 +1901,7 @@ function reorderPhoneConsultationMemos(draggedId, targetId = "", targetGroup = "
 
   savePhoneConsultationLayoutForCustomer(memos.map((memo) => memo.id), groupOverrides);
 
-  renderPhoneConsultationMemoButtons(activePhoneConsultationId);
+  renderPhoneConsultationMemoButtons(viewedPhoneConsultationMemoId);
   scheduleCloudSync();
   showPhoneConsultationStatus("저장된 메모 순서를 바꿨습니다.");
 }
@@ -1691,13 +1913,16 @@ function loadPhoneConsultationById(id) {
       showPhoneConsultationStatus("저장된 메모를 찾지 못했습니다.");
       return;
     }
+    viewedPhoneConsultationMemoId = memo.id;
     if (phoneConsultationCommonTemplateInput) {
       phoneConsultationCommonTemplateInput.value = memo.content || "";
     }
+    restorePhoneConsultationCommonHighlight(memo.highlightImage || "");
     setStoredPhoneConsultationCommonTemplate(memo.content || "");
+    setStoredPhoneConsultationCommonHighlight(memo.highlightImage || "");
     if (memo.source === "common-template") {
       appendPhoneConsultationMemoContent(memo.content, `"${memo.title || "공통 양식"}" 내용을 아래에 추가했습니다.`);
-      renderPhoneConsultationMemoButtons(activePhoneConsultationId);
+      renderPhoneConsultationMemoButtons(viewedPhoneConsultationMemoId);
       return;
     }
     activePhoneConsultationId = memo.id;
@@ -1705,7 +1930,7 @@ function loadPhoneConsultationById(id) {
     if (phoneConsultationMemoInput) phoneConsultationMemoInput.value = memo.content || "";
     restorePhoneConsultationHighlight(memo.highlightImage || "");
     savePhoneConsultationDraftForCustomer();
-    renderPhoneConsultationMemoButtons(memo.id);
+    renderPhoneConsultationMemoButtons(viewedPhoneConsultationMemoId);
     showPhoneConsultationStatus("메모를 불러왔습니다.");
   });
 }
@@ -1750,7 +1975,7 @@ function savePhoneConsultationMemo() {
     return;
   }
 
-  renderPhoneConsultationMemoButtons(activePhoneConsultationId);
+  renderPhoneConsultationMemoButtons(viewedPhoneConsultationMemoId);
   scheduleCloudSync();
   showPhoneConsultationStatus("전화상담 메모를 저장했습니다.");
 }
@@ -1778,10 +2003,13 @@ function deletePhoneConsultationMemoById(memoId) {
   });
   setStoredPhoneConsultationOrders(orders);
 
+  if (viewedPhoneConsultationMemoId === memoId) {
+    viewedPhoneConsultationMemoId = "";
+  }
   if (activePhoneConsultationId === memoId) {
     clearPhoneConsultationForm();
   } else {
-    renderPhoneConsultationMemoButtons(activePhoneConsultationId);
+    renderPhoneConsultationMemoButtons(viewedPhoneConsultationMemoId);
   }
   scheduleCloudSync();
   showPhoneConsultationStatus("저장된 메모를 삭제했습니다.");
@@ -4098,7 +4326,7 @@ function setPhoneConsultationMode(enabled, updateHash = true) {
   document.body.classList.toggle("phone-consultation-mode", enabled);
   if (enabled) {
     document.body.classList.remove("contract-management-mode", "design-manager-mode", "promotion-mode");
-    renderPhoneConsultationMemoButtons(activePhoneConsultationId);
+    renderPhoneConsultationMemoButtons(viewedPhoneConsultationMemoId);
     renderPhoneConsultationCommonTemplate();
     restorePhoneConsultationDraftForCustomer(savedCustomerSelect?.value || "");
   }
@@ -9034,17 +9262,20 @@ function bindApplicationUiEvents() {
   safeOn(phoneConsultationHighlightButton, "click", () => {
     setPhoneConsultationHighlightMode(!phoneConsultationHighlightMode);
     showPhoneConsultationStatus(phoneConsultationHighlightMode
-      ? "메모 위를 마우스나 손가락으로 그어주세요."
+      ? "메모의 시작점부터 끝점까지 직선으로 그어주세요."
       : "형광펜을 껐습니다.");
   });
   phoneConsultationHighlightSwatches.forEach((swatch) => {
     safeOn(swatch, "click", () => {
       phoneConsultationHighlightColor = swatch.dataset.highlightColor || "#ffe45c";
       phoneConsultationHighlightSwatches.forEach((item) => item.classList.toggle("is-selected", item === swatch));
+      setPhoneConsultationHighlightEraser(false);
       if (!phoneConsultationHighlightMode) setPhoneConsultationHighlightMode(true);
     });
   });
-  safeOn(clearPhoneConsultationHighlightButton, "click", clearPhoneConsultationHighlight);
+  safeOn(phoneConsultationEraserButton, "click", () => {
+    setPhoneConsultationHighlightEraser(!phoneConsultationHighlightEraseMode);
+  });
   safeOn(phoneConsultationHighlightCanvas, "pointerdown", startPhoneConsultationHighlight);
   safeOn(phoneConsultationHighlightCanvas, "pointermove", continuePhoneConsultationHighlight);
   safeOn(phoneConsultationHighlightCanvas, "pointerup", finishPhoneConsultationHighlight);
@@ -9066,9 +9297,44 @@ function bindApplicationUiEvents() {
     });
     highlightResizeObserver.observe(phoneConsultationMemoCanvasWrap);
   }
+  safeOn(phoneConsultationCommonHighlightButton, "click", () => {
+    setPhoneConsultationCommonHighlightMode(!phoneConsultationCommonHighlightMode);
+    showPhoneConsultationStatus(phoneConsultationCommonHighlightMode
+      ? "위 메모의 시작점부터 끝점까지 직선으로 그어주세요."
+      : "위 메모 형광펜을 껐습니다.");
+  });
+  phoneConsultationCommonHighlightSwatches.forEach((swatch) => {
+    safeOn(swatch, "click", () => {
+      phoneConsultationCommonHighlightColor = swatch.dataset.highlightColor || "#ffe45c";
+      phoneConsultationCommonHighlightSwatches.forEach((item) => item.classList.toggle("is-selected", item === swatch));
+      setPhoneConsultationCommonHighlightEraser(false);
+      if (!phoneConsultationCommonHighlightMode) setPhoneConsultationCommonHighlightMode(true);
+    });
+  });
+  safeOn(phoneConsultationCommonEraserButton, "click", () => {
+    setPhoneConsultationCommonHighlightEraser(!phoneConsultationCommonHighlightEraseMode);
+  });
+  safeOn(phoneConsultationCommonHighlightCanvas, "pointerdown", startPhoneConsultationCommonHighlight);
+  safeOn(phoneConsultationCommonHighlightCanvas, "pointermove", continuePhoneConsultationCommonHighlight);
+  safeOn(phoneConsultationCommonHighlightCanvas, "pointerup", finishPhoneConsultationCommonHighlight);
+  safeOn(phoneConsultationCommonHighlightCanvas, "pointercancel", finishPhoneConsultationCommonHighlight);
+  if (window.ResizeObserver && phoneConsultationCommonCanvasWrap) {
+    const commonHighlightResizeObserver = new ResizeObserver(() => {
+      window.clearTimeout(phoneConsultationCommonHighlightResizeTimer);
+      phoneConsultationCommonHighlightResizeTimer = window.setTimeout(() => {
+        const currentImage = capturePhoneConsultationCommonHighlight() || phoneConsultationCommonHighlightImage;
+        sizePhoneConsultationCommonHighlightCanvas(currentImage);
+      }, 80);
+    });
+    commonHighlightResizeObserver.observe(phoneConsultationCommonCanvasWrap);
+  }
   safeOn(phoneConsultationTitleInput, "input", () => savePhoneConsultationDraftForCustomer());
   safeOn(phoneConsultationMemoInput, "input", () => savePhoneConsultationDraftForCustomer());
-  safeOn(phoneConsultationCommonTemplateInput, "input", () => savePhoneConsultationDraftForCustomer());
+  safeOn(phoneConsultationCommonTemplateInput, "input", () => {
+    viewedPhoneConsultationMemoId = "";
+    phoneConsultationMemoList?.querySelectorAll(".is-selected").forEach((button) => button.classList.remove("is-selected"));
+    savePhoneConsultationDraftForCustomer();
+  });
   safeOn(generatePromotionButton, "click", generatePromotionCopy);
   safeOn(copyPromotionButton, "click", copyPromotionCopy);
   safeOn(savePromotionButton, "click", savePromotionPost);

@@ -822,7 +822,14 @@ body.promotion-mode .app {
 }
 
 #phoneConsultationCommonTemplateInput {
+  position: relative;
+  z-index: 2;
+  display: block;
+  width: 100%;
   min-height: 260px;
+  margin: 0;
+  background: transparent;
+  resize: vertical;
 }
 
 .phone-consultation-memo-field {
@@ -851,7 +858,7 @@ body.promotion-mode .app {
 }
 
 .phone-consultation-highlight-toggle,
-.phone-consultation-highlight-clear {
+.phone-consultation-highlight-eraser {
   width: auto;
   padding: 5px 10px;
   font-size: 0.82rem;
@@ -861,6 +868,12 @@ body.promotion-mode .app {
   border-color: #b08a00;
   background: #ffe45c;
   color: #342900;
+}
+
+.phone-consultation-highlight-eraser.is-active {
+  border-color: #9e3d3d;
+  background: #fff0f0;
+  color: #8a2020;
 }
 
 .phone-consultation-highlight-swatch {
@@ -937,17 +950,19 @@ body.promotion-mode .app {
 
 #phoneConsultationMemoInput {
   position: relative;
-  z-index: 1;
+  z-index: 2;
   display: block;
   width: 100%;
   min-height: 520px;
   margin: 0;
+  background: transparent;
   resize: vertical;
 }
 
-#phoneConsultationHighlightCanvas {
+#phoneConsultationHighlightCanvas,
+#phoneConsultationCommonHighlightCanvas {
   position: absolute;
-  z-index: 2;
+  z-index: 1;
   inset: 0;
   width: 100%;
   height: 100%;
@@ -955,9 +970,21 @@ body.promotion-mode .app {
   touch-action: none;
 }
 
-#phoneConsultationHighlightCanvas.is-active {
+#phoneConsultationHighlightCanvas.is-active,
+#phoneConsultationCommonHighlightCanvas.is-active {
   pointer-events: auto;
   cursor: crosshair;
+}
+
+.phone-consultation-memo-canvas-wrap {
+  overflow: hidden;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.phone-consultation-memo-canvas-wrap.is-highlight-mode textarea {
+  pointer-events: none;
+  user-select: none;
 }
 
 @media (max-width: 720px) {
@@ -1004,7 +1031,8 @@ body.promotion-mode .app {
   cursor: grabbing;
 }
 
-.phone-consultation-memo-button:hover {
+.phone-consultation-memo-button:hover,
+.phone-consultation-memo-button.is-selected {
   border-color: var(--accent);
   background: #f5fbf7;
 }
