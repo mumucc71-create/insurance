@@ -219,6 +219,7 @@ const designManagerStorageKey = "insuranceDesignManagers";
 const phoneConsultationStorageKey = "insurancePhoneConsultationMemos";
 const phoneConsultationCommonTemplateStorageKey = "insurancePhoneConsultationCommonTemplate";
 const phoneConsultationCommonTemplateHighlightStorageKey = "insurancePhoneConsultationCommonTemplateHighlight";
+const phoneConsultationCommonTemplateHighlightStrokesStorageKey = "insurancePhoneConsultationCommonTemplateHighlightStrokes";
 const phoneConsultationDraftStorageKey = "insurancePhoneConsultationDrafts";
 const phoneConsultationOrderStorageKey = "insurancePhoneConsultationOrders";
 const promotionPostsStorageKey = "insurancePromotionPosts";
@@ -243,6 +244,8 @@ let phoneConsultationHighlightLastPoint = null;
 let phoneConsultationHighlightStartPoint = null;
 let phoneConsultationHighlightSnapshot = null;
 let phoneConsultationHighlightImage = "";
+let phoneConsultationHighlightStrokes = [];
+let phoneConsultationHighlightPreviousText = "";
 let phoneConsultationHighlightResizeTimer = null;
 let phoneConsultationHighlightEraseMode = false;
 let phoneConsultationCommonHighlightMode = false;
@@ -252,6 +255,8 @@ let phoneConsultationCommonHighlightLastPoint = null;
 let phoneConsultationCommonHighlightStartPoint = null;
 let phoneConsultationCommonHighlightSnapshot = null;
 let phoneConsultationCommonHighlightImage = "";
+let phoneConsultationCommonHighlightStrokes = [];
+let phoneConsultationCommonHighlightPreviousText = "";
 let phoneConsultationCommonHighlightResizeTimer = null;
 let phoneConsultationCommonHighlightEraseMode = false;
 let autoSaveTimer = null;
@@ -1109,6 +1114,18 @@ function setStoredPhoneConsultationCommonHighlight(imageDataUrl) {
   );
 }
 
+function getStoredPhoneConsultationCommonHighlightStrokes() {
+  const strokes = readJsonStorage(getScopedStorageKey(phoneConsultationCommonTemplateHighlightStrokesStorageKey), []);
+  return Array.isArray(strokes) ? strokes : [];
+}
+
+function setStoredPhoneConsultationCommonHighlightStrokes(strokes) {
+  localStorage.setItem(
+    getScopedStorageKey(phoneConsultationCommonTemplateHighlightStrokesStorageKey),
+    JSON.stringify(Array.isArray(strokes) ? strokes : []),
+  );
+}
+
 function getPhoneConsultationCustomerKey(customerId = activePhoneConsultationCustomerId || savedCustomerSelect?.value || "") {
   return customerId || "__new_customer__";
 }
@@ -1180,14 +1197,24 @@ function sizePhoneConsultationHighlightCanvas(imageDataUrl = phoneConsultationHi
   image.src = imageDataUrl;
 }
 
-function restorePhoneConsultationHighlight(imageDataUrl = "") {
+function restorePhoneConsultationHighlight(imageDataUrl = "", strokes = []) {
   phoneConsultationHighlightImage = String(imageDataUrl || "");
+  phoneConsultationHighlightStrokes = Array.isArray(strokes) ? strokes.map((stroke) => ({ ...stroke })) : [];
+  phoneConsultationHighlightPreviousText = phoneConsultationMemoInput?.value || "";
   sizePhoneConsultationHighlightCanvas("");
   const context = getPhoneConsultationHighlightContext();
   if (!context || !phoneConsultationHighlightCanvas) return;
   const rect = phoneConsultationMemoCanvasWrap.getBoundingClientRect();
   const contentHeight = Math.max(rect.height, phoneConsultationMemoInput?.scrollHeight || 0);
   context.clearRect(0, 0, rect.width, contentHeight);
+  if (phoneConsultationHighlightStrokes.length) {
+    phoneConsultationHighlightImage = drawAnchoredHighlightStrokes(
+      phoneConsultationHighlightCanvas,
+      phoneConsultationMemoInput,
+      phoneConsultationHighlightStrokes,
+    );
+    return;
+  }
   if (!phoneConsultationHighlightImage) return;
 
   const image = new Image();
@@ -1214,6 +1241,7 @@ function setPhoneConsultationHighlightMode(enabled) {
     phoneConsultationHighlightEraseMode = false;
     phoneConsultationEraserButton?.classList.remove("is-active");
     phoneConsultationEraserButton?.setAttribute("aria-pressed", "false");
+    phoneConsultationMemoCanvasWrap?.classList.remove("is-eraser-mode");
   }
   if (phoneConsultationHighlightMode) sizePhoneConsultationHighlightCanvas();
 }
@@ -1224,6 +1252,240 @@ function getPhoneConsultationHighlightPoint(event) {
     x: Math.max(0, Math.min(rect.width, event.clientX - rect.left)),
     y: Math.max(0, Math.min(rect.height, event.clientY - rect.top)),
   };
+}
+
+function getTextareaHighlightMetrics(textarea) {
+  const style = window.getComputedStyle(textarea);
+  const fontSize = Number.parseFloat(style.fontSize) || 16;
+  const parsedLineHeight = Number.parseFloat(style.lineHeight);
+  const measureContext = document.createElement("canvas").getContext("2d");
+  measureContext.font = style.font || `${fontSize}px sans-serif`;
+  return {
+    context: measureContext,
+    lineHeight: Number.isFinite(parsedLineHeight) ? parsedLineHeight : fontSize * 1.45,
+    paddingLeft: Number.parseFloat(style.paddingLeft) || 0,
+    paddingTop: Number.parseFloat(style.paddingTop) || 0,
+  };
+}
+
+function getTextareaLineRecords(textarea) {
+  const text = textarea?.value || "";
+  const lines = text.split("\n");
+  let offset = 0;
+  return lines.map((line, index) => {
+    const record = { line, index, start: offset, end: offset + line.length };
+    offset += line.length + 1;
+    return record;
+  });
+}
+
+function getTextareaOffsetFromPoint(textarea, point) {
+  const metrics = getTextareaHighlightMetrics(textarea);
+  const lines = getTextareaLineRecords(textarea);
+  const lineIndex = Math.max(0, Math.min(
+    lines.length - 1,
+    Math.floor((point.y - metrics.paddingTop) / metrics.lineHeight),
+  ));
+  const record = lines[lineIndex] || { line: "", start: 0 };
+  const targetX = Math.max(0, point.x - metrics.paddingLeft);
+  let measuredWidth = 0;
+  let column = 0;
+  for (; column < record.line.length; column += 1) {
+    const characterWidth = metrics.context.measureText(record.line[column]).width;
+    if (targetX < measuredWidth + (characterWidth / 2)) break;
+    measuredWidth += characterWidth;
+  }
+  return record.start + column;
+}
+
+function createAnchoredHighlightStroke(textarea, from, to, color) {
+  if (!textarea || !from || !to) return null;
+  let start = getTextareaOffsetFromPoint(textarea, from);
+  let end = getTextareaOffsetFromPoint(textarea, to);
+  if (end < start) [start, end] = [end, start];
+  if (end === start) end = Math.min((textarea.value || "").length, start + 1);
+  if (end <= start) return null;
+  return { start, end, color: color || "#ffe45c" };
+}
+
+function getTextareaPointFromOffset(textarea, offset) {
+  const metrics = getTextareaHighlightMetrics(textarea);
+  const lines = getTextareaLineRecords(textarea);
+  const normalizedOffset = Math.max(0, Math.min((textarea.value || "").length, Number(offset) || 0));
+  const record = lines.find((line) => normalizedOffset <= line.end) || lines[lines.length - 1];
+  const column = Math.max(0, Math.min(record.line.length, normalizedOffset - record.start));
+  return {
+    x: metrics.paddingLeft + metrics.context.measureText(record.line.slice(0, column)).width,
+    y: metrics.paddingTop + (record.index * metrics.lineHeight) + (metrics.lineHeight * 0.58),
+    lineIndex: record.index,
+  };
+}
+
+function drawAnchoredHighlightStrokes(canvas, textarea, strokes) {
+  if (!canvas || !textarea || !Array.isArray(strokes) || !strokes.length) return "";
+  const context = canvas.getContext("2d");
+  const wrapper = canvas.parentElement;
+  if (!context || !wrapper) return "";
+  const rect = wrapper.getBoundingClientRect();
+  const contentHeight = Math.max(rect.height, textarea.scrollHeight || 0);
+  context.clearRect(0, 0, rect.width, contentHeight);
+
+  strokes.forEach((stroke) => {
+    const from = getTextareaPointFromOffset(textarea, stroke.start);
+    const to = getTextareaPointFromOffset(textarea, stroke.end);
+    context.save();
+    context.globalAlpha = 0.38;
+    context.strokeStyle = stroke.color || "#ffe45c";
+    context.lineWidth = 22;
+    context.lineCap = "round";
+    context.lineJoin = "round";
+    context.beginPath();
+    context.moveTo(from.x, from.y);
+    context.lineTo(to.x, to.y);
+    context.stroke();
+    context.restore();
+  });
+  return canvas.toDataURL("image/png");
+}
+
+function adjustAnchoredHighlightStrokes(strokes, previousText, nextText) {
+  if (!Array.isArray(strokes) || !strokes.length || previousText === nextText) return strokes;
+  let prefixLength = 0;
+  const sharedLength = Math.min(previousText.length, nextText.length);
+  while (prefixLength < sharedLength && previousText[prefixLength] === nextText[prefixLength]) {
+    prefixLength += 1;
+  }
+
+  let suffixLength = 0;
+  while (
+    suffixLength < sharedLength - prefixLength
+    && previousText[previousText.length - 1 - suffixLength] === nextText[nextText.length - 1 - suffixLength]
+  ) {
+    suffixLength += 1;
+  }
+
+  const oldChangeEnd = previousText.length - suffixLength;
+  const newChangeEnd = nextText.length - suffixLength;
+  const offsetDelta = newChangeEnd - oldChangeEnd;
+  return strokes.map((stroke) => {
+    const nextStroke = { ...stroke };
+    if (nextStroke.end <= prefixLength) return nextStroke;
+    if (nextStroke.start >= oldChangeEnd) {
+      nextStroke.start = Math.max(0, nextStroke.start + offsetDelta);
+      nextStroke.end = Math.max(nextStroke.start, nextStroke.end + offsetDelta);
+      return nextStroke;
+    }
+    nextStroke.end = Math.max(nextStroke.start, nextStroke.end + offsetDelta);
+    return nextStroke;
+  }).filter((stroke) => stroke.end > stroke.start);
+}
+
+function eraseAnchoredHighlightStrokeAtPoint(canvas, textarea, strokes, event) {
+  if (!canvas || !textarea || !Array.isArray(strokes) || !strokes.length) return false;
+  const rect = canvas.getBoundingClientRect();
+  const point = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+  let closestIndex = -1;
+  let closestDistance = Number.POSITIVE_INFINITY;
+  strokes.forEach((stroke, index) => {
+    const from = getTextareaPointFromOffset(textarea, stroke.start);
+    const to = getTextareaPointFromOffset(textarea, stroke.end);
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const lengthSquared = (dx * dx) + (dy * dy) || 1;
+    const ratio = Math.max(0, Math.min(1, (((point.x - from.x) * dx) + ((point.y - from.y) * dy)) / lengthSquared));
+    const nearestX = from.x + (ratio * dx);
+    const nearestY = from.y + (ratio * dy);
+    const distance = Math.hypot(point.x - nearestX, point.y - nearestY);
+    if (distance < closestDistance) {
+      closestDistance = distance;
+      closestIndex = index;
+    }
+  });
+  if (closestIndex < 0 || closestDistance > 18) return false;
+  strokes.splice(closestIndex, 1);
+  return true;
+}
+
+function eraseConnectedHighlightAtPoint(canvas, event) {
+  if (!canvas) return false;
+  const context = canvas.getContext("2d");
+  const rect = canvas.getBoundingClientRect();
+  if (!context || !rect.width || !rect.height || !canvas.width || !canvas.height) return false;
+
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  const targetX = Math.round((event.clientX - rect.left) * scaleX);
+  const targetY = Math.round((event.clientY - rect.top) * scaleY);
+  const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+  const { data, width, height } = imageData;
+  const alphaThreshold = 3;
+  const isMarked = (x, y) => (
+    x >= 0
+    && x < width
+    && y >= 0
+    && y < height
+    && data[((y * width) + x) * 4 + 3] > alphaThreshold
+  );
+
+  let seedX = -1;
+  let seedY = -1;
+  let closestDistance = Number.POSITIVE_INFINITY;
+  const searchRadius = Math.max(8, Math.round(14 * Math.max(scaleX, scaleY)));
+  for (let offsetY = -searchRadius; offsetY <= searchRadius; offsetY += 1) {
+    for (let offsetX = -searchRadius; offsetX <= searchRadius; offsetX += 1) {
+      const x = targetX + offsetX;
+      const y = targetY + offsetY;
+      const distance = (offsetX * offsetX) + (offsetY * offsetY);
+      if (distance < closestDistance && isMarked(x, y)) {
+        seedX = x;
+        seedY = y;
+        closestDistance = distance;
+      }
+    }
+  }
+  if (seedX < 0 || seedY < 0) return false;
+
+  const stack = [[seedX, seedY]];
+  while (stack.length) {
+    const [startX, y] = stack.pop();
+    if (!isMarked(startX, y)) continue;
+
+    let x = startX;
+    while (x >= 0 && isMarked(x, y)) x -= 1;
+    x += 1;
+    let spanAbove = false;
+    let spanBelow = false;
+
+    while (x < width && isMarked(x, y)) {
+      const index = ((y * width) + x) * 4;
+      data[index] = 0;
+      data[index + 1] = 0;
+      data[index + 2] = 0;
+      data[index + 3] = 0;
+
+      if (y > 0) {
+        if (isMarked(x, y - 1) && !spanAbove) {
+          stack.push([x, y - 1]);
+          spanAbove = true;
+        } else if (!isMarked(x, y - 1)) {
+          spanAbove = false;
+        }
+      }
+
+      if (y < height - 1) {
+        if (isMarked(x, y + 1) && !spanBelow) {
+          stack.push([x, y + 1]);
+          spanBelow = true;
+        } else if (!isMarked(x, y + 1)) {
+          spanBelow = false;
+        }
+      }
+      x += 1;
+    }
+  }
+
+  context.putImageData(imageData, 0, 0);
+  return true;
 }
 
 function drawPhoneConsultationHighlight(from, to) {
@@ -1247,6 +1509,37 @@ function startPhoneConsultationHighlight(event) {
   if (!phoneConsultationHighlightMode) return;
   event.preventDefault();
   sizePhoneConsultationHighlightCanvas();
+  if (phoneConsultationHighlightEraseMode) {
+    const erasedAnchoredStroke = eraseAnchoredHighlightStrokeAtPoint(
+      phoneConsultationHighlightCanvas,
+      phoneConsultationMemoInput,
+      phoneConsultationHighlightStrokes,
+      event,
+    );
+    if (erasedAnchoredStroke) {
+      phoneConsultationHighlightImage = phoneConsultationHighlightStrokes.length
+        ? drawAnchoredHighlightStrokes(
+          phoneConsultationHighlightCanvas,
+          phoneConsultationMemoInput,
+          phoneConsultationHighlightStrokes,
+        )
+        : "";
+      if (!phoneConsultationHighlightStrokes.length) {
+        const context = getPhoneConsultationHighlightContext();
+        const rect = phoneConsultationMemoCanvasWrap.getBoundingClientRect();
+        context.clearRect(0, 0, rect.width, Math.max(rect.height, phoneConsultationMemoInput.scrollHeight || 0));
+      }
+      savePhoneConsultationDraftForCustomer();
+      showPhoneConsultationStatus("클릭한 형광펜 선을 지웠습니다.");
+    } else if (eraseConnectedHighlightAtPoint(phoneConsultationHighlightCanvas, event)) {
+      phoneConsultationHighlightImage = phoneConsultationHighlightCanvas.toDataURL("image/png");
+      savePhoneConsultationDraftForCustomer();
+      showPhoneConsultationStatus("클릭한 형광펜 선을 지웠습니다.");
+    } else {
+      showPhoneConsultationStatus("지울 형광펜 선을 정확히 클릭해주세요.");
+    }
+    return;
+  }
   phoneConsultationHighlightDrawing = true;
   phoneConsultationHighlightStartPoint = getPhoneConsultationHighlightPoint(event);
   phoneConsultationHighlightLastPoint = phoneConsultationHighlightStartPoint;
@@ -1275,12 +1568,20 @@ function continuePhoneConsultationHighlight(event) {
 
 function finishPhoneConsultationHighlight(event) {
   if (!phoneConsultationHighlightDrawing) return;
+  const anchoredStroke = createAnchoredHighlightStroke(
+    phoneConsultationMemoInput,
+    phoneConsultationHighlightStartPoint,
+    phoneConsultationHighlightLastPoint,
+    phoneConsultationHighlightColor,
+  );
+  if (anchoredStroke) phoneConsultationHighlightStrokes.push(anchoredStroke);
   phoneConsultationHighlightDrawing = false;
   phoneConsultationHighlightLastPoint = null;
   phoneConsultationHighlightStartPoint = null;
   phoneConsultationHighlightSnapshot = null;
   phoneConsultationHighlightCanvas.releasePointerCapture?.(event.pointerId);
   phoneConsultationHighlightImage = phoneConsultationHighlightCanvas.toDataURL("image/png");
+  phoneConsultationHighlightPreviousText = phoneConsultationMemoInput?.value || "";
   savePhoneConsultationDraftForCustomer();
   showPhoneConsultationStatus(phoneConsultationHighlightEraseMode
     ? "선택한 형광펜 표시를 지웠습니다."
@@ -1291,11 +1592,12 @@ function setPhoneConsultationHighlightEraser(enabled) {
   phoneConsultationHighlightEraseMode = Boolean(enabled);
   phoneConsultationEraserButton?.classList.toggle("is-active", phoneConsultationHighlightEraseMode);
   phoneConsultationEraserButton?.setAttribute("aria-pressed", String(phoneConsultationHighlightEraseMode));
+  phoneConsultationMemoCanvasWrap?.classList.toggle("is-eraser-mode", phoneConsultationHighlightEraseMode);
   if (phoneConsultationHighlightEraseMode && !phoneConsultationHighlightMode) {
     setPhoneConsultationHighlightMode(true);
   }
   showPhoneConsultationStatus(phoneConsultationHighlightEraseMode
-    ? "지울 부분을 직선으로 그어주세요."
+    ? "지울 형광펜 선을 클릭해주세요."
     : "형광펜 색상을 선택해 직선으로 그어주세요.");
 }
 
@@ -1345,14 +1647,24 @@ function sizePhoneConsultationCommonHighlightCanvas(imageDataUrl = phoneConsulta
   image.src = imageDataUrl;
 }
 
-function restorePhoneConsultationCommonHighlight(imageDataUrl = "") {
+function restorePhoneConsultationCommonHighlight(imageDataUrl = "", strokes = []) {
   phoneConsultationCommonHighlightImage = String(imageDataUrl || "");
+  phoneConsultationCommonHighlightStrokes = Array.isArray(strokes) ? strokes.map((stroke) => ({ ...stroke })) : [];
+  phoneConsultationCommonHighlightPreviousText = phoneConsultationCommonTemplateInput?.value || "";
   sizePhoneConsultationCommonHighlightCanvas("");
   const context = getPhoneConsultationCommonHighlightContext();
   if (!context || !phoneConsultationCommonHighlightCanvas || !phoneConsultationCommonCanvasWrap) return;
   const rect = phoneConsultationCommonCanvasWrap.getBoundingClientRect();
   const contentHeight = Math.max(rect.height, phoneConsultationCommonTemplateInput?.scrollHeight || 0);
   context.clearRect(0, 0, rect.width, contentHeight);
+  if (phoneConsultationCommonHighlightStrokes.length) {
+    phoneConsultationCommonHighlightImage = drawAnchoredHighlightStrokes(
+      phoneConsultationCommonHighlightCanvas,
+      phoneConsultationCommonTemplateInput,
+      phoneConsultationCommonHighlightStrokes,
+    );
+    return;
+  }
   if (!phoneConsultationCommonHighlightImage) return;
 
   const image = new Image();
@@ -1379,6 +1691,7 @@ function setPhoneConsultationCommonHighlightMode(enabled) {
     phoneConsultationCommonHighlightEraseMode = false;
     phoneConsultationCommonEraserButton?.classList.remove("is-active");
     phoneConsultationCommonEraserButton?.setAttribute("aria-pressed", "false");
+    phoneConsultationCommonCanvasWrap?.classList.remove("is-eraser-mode");
   }
   if (phoneConsultationCommonHighlightMode) sizePhoneConsultationCommonHighlightCanvas();
 }
@@ -1412,6 +1725,37 @@ function startPhoneConsultationCommonHighlight(event) {
   if (!phoneConsultationCommonHighlightMode) return;
   event.preventDefault();
   sizePhoneConsultationCommonHighlightCanvas();
+  if (phoneConsultationCommonHighlightEraseMode) {
+    const erasedAnchoredStroke = eraseAnchoredHighlightStrokeAtPoint(
+      phoneConsultationCommonHighlightCanvas,
+      phoneConsultationCommonTemplateInput,
+      phoneConsultationCommonHighlightStrokes,
+      event,
+    );
+    if (erasedAnchoredStroke) {
+      phoneConsultationCommonHighlightImage = phoneConsultationCommonHighlightStrokes.length
+        ? drawAnchoredHighlightStrokes(
+          phoneConsultationCommonHighlightCanvas,
+          phoneConsultationCommonTemplateInput,
+          phoneConsultationCommonHighlightStrokes,
+        )
+        : "";
+      if (!phoneConsultationCommonHighlightStrokes.length) {
+        const context = getPhoneConsultationCommonHighlightContext();
+        const rect = phoneConsultationCommonCanvasWrap.getBoundingClientRect();
+        context.clearRect(0, 0, rect.width, Math.max(rect.height, phoneConsultationCommonTemplateInput.scrollHeight || 0));
+      }
+      savePhoneConsultationDraftForCustomer();
+      showPhoneConsultationStatus("위 메모에서 클릭한 형광펜 선을 지웠습니다.");
+    } else if (eraseConnectedHighlightAtPoint(phoneConsultationCommonHighlightCanvas, event)) {
+      phoneConsultationCommonHighlightImage = phoneConsultationCommonHighlightCanvas.toDataURL("image/png");
+      savePhoneConsultationDraftForCustomer();
+      showPhoneConsultationStatus("위 메모에서 클릭한 형광펜 선을 지웠습니다.");
+    } else {
+      showPhoneConsultationStatus("위 메모에서 지울 형광펜 선을 정확히 클릭해주세요.");
+    }
+    return;
+  }
   phoneConsultationCommonHighlightDrawing = true;
   phoneConsultationCommonHighlightStartPoint = getPhoneConsultationCommonHighlightPoint(event);
   phoneConsultationCommonHighlightLastPoint = phoneConsultationCommonHighlightStartPoint;
@@ -1440,12 +1784,20 @@ function continuePhoneConsultationCommonHighlight(event) {
 
 function finishPhoneConsultationCommonHighlight(event) {
   if (!phoneConsultationCommonHighlightDrawing) return;
+  const anchoredStroke = createAnchoredHighlightStroke(
+    phoneConsultationCommonTemplateInput,
+    phoneConsultationCommonHighlightStartPoint,
+    phoneConsultationCommonHighlightLastPoint,
+    phoneConsultationCommonHighlightColor,
+  );
+  if (anchoredStroke) phoneConsultationCommonHighlightStrokes.push(anchoredStroke);
   phoneConsultationCommonHighlightDrawing = false;
   phoneConsultationCommonHighlightLastPoint = null;
   phoneConsultationCommonHighlightStartPoint = null;
   phoneConsultationCommonHighlightSnapshot = null;
   phoneConsultationCommonHighlightCanvas.releasePointerCapture?.(event.pointerId);
   phoneConsultationCommonHighlightImage = phoneConsultationCommonHighlightCanvas.toDataURL("image/png");
+  phoneConsultationCommonHighlightPreviousText = phoneConsultationCommonTemplateInput?.value || "";
   savePhoneConsultationDraftForCustomer();
   showPhoneConsultationStatus(phoneConsultationCommonHighlightEraseMode
     ? "선택한 형광펜 표시를 지웠습니다."
@@ -1456,11 +1808,12 @@ function setPhoneConsultationCommonHighlightEraser(enabled) {
   phoneConsultationCommonHighlightEraseMode = Boolean(enabled);
   phoneConsultationCommonEraserButton?.classList.toggle("is-active", phoneConsultationCommonHighlightEraseMode);
   phoneConsultationCommonEraserButton?.setAttribute("aria-pressed", String(phoneConsultationCommonHighlightEraseMode));
+  phoneConsultationCommonCanvasWrap?.classList.toggle("is-eraser-mode", phoneConsultationCommonHighlightEraseMode);
   if (phoneConsultationCommonHighlightEraseMode && !phoneConsultationCommonHighlightMode) {
     setPhoneConsultationCommonHighlightMode(true);
   }
   showPhoneConsultationStatus(phoneConsultationCommonHighlightEraseMode
-    ? "위 메모에서 지울 부분을 직선으로 그어주세요."
+    ? "위 메모에서 지울 형광펜 선을 클릭해주세요."
     : "위 메모에서 형광펜 색상을 선택해 직선으로 그어주세요.");
 }
 
@@ -1486,8 +1839,10 @@ function savePhoneConsultationDraftForCustomer(customerId = activePhoneConsultat
     title: phoneConsultationTitleInput?.value ?? "",
     memo: phoneConsultationMemoInput?.value ?? "",
     highlightImage: phoneConsultationHighlightImage,
+    highlightStrokes: phoneConsultationHighlightStrokes,
     commonTemplate: phoneConsultationCommonTemplateInput?.value ?? getStoredPhoneConsultationCommonTemplate(),
     commonHighlightImage: phoneConsultationCommonHighlightImage,
+    commonHighlightStrokes: phoneConsultationCommonHighlightStrokes,
     activeMemoId: activePhoneConsultationId,
     viewedMemoId: viewedPhoneConsultationMemoId,
     updatedAt: new Date().toISOString(),
@@ -1514,9 +1869,12 @@ function restorePhoneConsultationDraftForCustomer(customerId = savedCustomerSele
   viewedPhoneConsultationMemoId = draft.viewedMemoId || "";
   if (phoneConsultationTitleInput) phoneConsultationTitleInput.value = draft.title || "";
   if (phoneConsultationMemoInput) phoneConsultationMemoInput.value = draft.memo || "";
-  restorePhoneConsultationHighlight(draft.highlightImage || "");
+  restorePhoneConsultationHighlight(draft.highlightImage || "", draft.highlightStrokes || []);
   if (phoneConsultationCommonTemplateInput) phoneConsultationCommonTemplateInput.value = draft.commonTemplate || getStoredPhoneConsultationCommonTemplate();
-  restorePhoneConsultationCommonHighlight(draft.commonHighlightImage || getStoredPhoneConsultationCommonHighlight());
+  restorePhoneConsultationCommonHighlight(
+    draft.commonHighlightImage || getStoredPhoneConsultationCommonHighlight(),
+    draft.commonHighlightStrokes || getStoredPhoneConsultationCommonHighlightStrokes(),
+  );
   renderPhoneConsultationMemoButtons(viewedPhoneConsultationMemoId);
 }
 
@@ -1585,7 +1943,10 @@ function renderPhoneConsultationCommonTemplate() {
   if (phoneConsultationCommonTemplateInput) {
     phoneConsultationCommonTemplateInput.value = getStoredPhoneConsultationCommonTemplate();
   }
-  restorePhoneConsultationCommonHighlight(getStoredPhoneConsultationCommonHighlight());
+  restorePhoneConsultationCommonHighlight(
+    getStoredPhoneConsultationCommonHighlight(),
+    getStoredPhoneConsultationCommonHighlightStrokes(),
+  );
 }
 
 function getPhoneConsultationTemplateButtonTitle(content) {
@@ -1595,7 +1956,7 @@ function getPhoneConsultationTemplateButtonTitle(content) {
     .find(Boolean) || "";
 }
 
-function savePhoneConsultationCommonTemplateAsMemo(content, highlightImage = "") {
+function savePhoneConsultationCommonTemplateAsMemo(content, highlightImage = "", highlightStrokes = []) {
   const title = getPhoneConsultationTemplateButtonTitle(content);
   if (!title) return { saved: false, reason: "empty-title" };
 
@@ -1610,6 +1971,7 @@ function savePhoneConsultationCommonTemplateAsMemo(content, highlightImage = "")
     memo.title = title;
     memo.content = content;
     memo.highlightImage = highlightImage;
+    memo.highlightStrokes = highlightStrokes;
     memo.source = "common-template";
     memo.updatedAt = now;
   } else {
@@ -1618,6 +1980,7 @@ function savePhoneConsultationCommonTemplateAsMemo(content, highlightImage = "")
       title,
       content,
       highlightImage,
+      highlightStrokes,
       source: "common-template",
       sortOrder: getNextPhoneConsultationSortOrder(memos),
       createdAt: now,
@@ -1632,8 +1995,13 @@ function savePhoneConsultationCommonTemplate() {
   const content = phoneConsultationCommonTemplateInput?.value ?? "";
   setStoredPhoneConsultationCommonTemplate(content);
   setStoredPhoneConsultationCommonHighlight(phoneConsultationCommonHighlightImage);
+  setStoredPhoneConsultationCommonHighlightStrokes(phoneConsultationCommonHighlightStrokes);
   savePhoneConsultationDraftForCustomer();
-  const result = savePhoneConsultationCommonTemplateAsMemo(content, phoneConsultationCommonHighlightImage);
+  const result = savePhoneConsultationCommonTemplateAsMemo(
+    content,
+    phoneConsultationCommonHighlightImage,
+    phoneConsultationCommonHighlightStrokes,
+  );
   renderPhoneConsultationMemoButtons();
   scheduleCloudSync();
 
@@ -1660,6 +2028,7 @@ function appendPhoneConsultationMemoContent(content, message = "내용을 메모
   phoneConsultationMemoInput.value = current.trim()
     ? `${current.replace(/\s+$/, "")}\n\n${template}`
     : template;
+  phoneConsultationHighlightPreviousText = phoneConsultationMemoInput.value;
   if (options.focusMemo) {
     focusWithoutPageJump(phoneConsultationMemoInput);
     phoneConsultationMemoInput.selectionStart = phoneConsultationMemoInput.value.length;
@@ -1935,9 +2304,10 @@ function loadPhoneConsultationById(id) {
     if (phoneConsultationCommonTemplateInput) {
       phoneConsultationCommonTemplateInput.value = memo.content || "";
     }
-    restorePhoneConsultationCommonHighlight(memo.highlightImage || "");
+    restorePhoneConsultationCommonHighlight(memo.highlightImage || "", memo.highlightStrokes || []);
     setStoredPhoneConsultationCommonTemplate(memo.content || "");
     setStoredPhoneConsultationCommonHighlight(memo.highlightImage || "");
+    setStoredPhoneConsultationCommonHighlightStrokes(memo.highlightStrokes || []);
     if (memo.source === "common-template") {
       appendPhoneConsultationMemoContent(memo.content, `"${memo.title || "공통 양식"}" 내용을 아래에 추가했습니다.`);
       renderPhoneConsultationMemoButtons(viewedPhoneConsultationMemoId);
@@ -1946,7 +2316,7 @@ function loadPhoneConsultationById(id) {
     activePhoneConsultationId = memo.id;
     if (phoneConsultationTitleInput) phoneConsultationTitleInput.value = memo.title || "";
     if (phoneConsultationMemoInput) phoneConsultationMemoInput.value = memo.content || "";
-    restorePhoneConsultationHighlight(memo.highlightImage || "");
+    restorePhoneConsultationHighlight(memo.highlightImage || "", memo.highlightStrokes || []);
     savePhoneConsultationDraftForCustomer();
     renderPhoneConsultationMemoButtons(viewedPhoneConsultationMemoId);
     showPhoneConsultationStatus("메모를 불러왔습니다.");
@@ -1974,6 +2344,7 @@ function savePhoneConsultationMemo() {
     existing.title = title;
     existing.content = content;
     existing.highlightImage = phoneConsultationHighlightImage;
+    existing.highlightStrokes = phoneConsultationHighlightStrokes;
     existing.updatedAt = now;
   } else {
     activePhoneConsultationId = `phone-memo-${Date.now()}`;
@@ -1982,6 +2353,7 @@ function savePhoneConsultationMemo() {
       title,
       content,
       highlightImage: phoneConsultationHighlightImage,
+      highlightStrokes: phoneConsultationHighlightStrokes,
       sortOrder: getNextPhoneConsultationSortOrder(memos),
       createdAt: now,
       updatedAt: now,
@@ -9361,16 +9733,48 @@ function bindApplicationUiEvents() {
   safeOn(phoneConsultationTitleInput, "input", () => savePhoneConsultationDraftForCustomer());
   safeOn(phoneConsultationMemoInput, "scroll", syncPhoneConsultationHighlightScroll);
   safeOn(phoneConsultationMemoInput, "input", () => {
-    const currentImage = capturePhoneConsultationHighlight() || phoneConsultationHighlightImage;
-    sizePhoneConsultationHighlightCanvas(currentImage);
+    const nextText = phoneConsultationMemoInput.value || "";
+    phoneConsultationHighlightStrokes = adjustAnchoredHighlightStrokes(
+      phoneConsultationHighlightStrokes,
+      phoneConsultationHighlightPreviousText,
+      nextText,
+    );
+    phoneConsultationHighlightPreviousText = nextText;
+    if (phoneConsultationHighlightStrokes.length) {
+      sizePhoneConsultationHighlightCanvas("");
+      phoneConsultationHighlightImage = drawAnchoredHighlightStrokes(
+        phoneConsultationHighlightCanvas,
+        phoneConsultationMemoInput,
+        phoneConsultationHighlightStrokes,
+      );
+    } else {
+      const currentImage = capturePhoneConsultationHighlight() || phoneConsultationHighlightImage;
+      sizePhoneConsultationHighlightCanvas(currentImage);
+    }
     savePhoneConsultationDraftForCustomer();
   });
   safeOn(phoneConsultationCommonTemplateInput, "scroll", syncPhoneConsultationCommonHighlightScroll);
   safeOn(phoneConsultationCommonTemplateInput, "input", () => {
     viewedPhoneConsultationMemoId = "";
     phoneConsultationMemoList?.querySelectorAll(".is-selected").forEach((button) => button.classList.remove("is-selected"));
-    const currentImage = capturePhoneConsultationCommonHighlight() || phoneConsultationCommonHighlightImage;
-    sizePhoneConsultationCommonHighlightCanvas(currentImage);
+    const nextText = phoneConsultationCommonTemplateInput.value || "";
+    phoneConsultationCommonHighlightStrokes = adjustAnchoredHighlightStrokes(
+      phoneConsultationCommonHighlightStrokes,
+      phoneConsultationCommonHighlightPreviousText,
+      nextText,
+    );
+    phoneConsultationCommonHighlightPreviousText = nextText;
+    if (phoneConsultationCommonHighlightStrokes.length) {
+      sizePhoneConsultationCommonHighlightCanvas("");
+      phoneConsultationCommonHighlightImage = drawAnchoredHighlightStrokes(
+        phoneConsultationCommonHighlightCanvas,
+        phoneConsultationCommonTemplateInput,
+        phoneConsultationCommonHighlightStrokes,
+      );
+    } else {
+      const currentImage = capturePhoneConsultationCommonHighlight() || phoneConsultationCommonHighlightImage;
+      sizePhoneConsultationCommonHighlightCanvas(currentImage);
+    }
     savePhoneConsultationDraftForCustomer();
   });
   safeOn(generatePromotionButton, "click", generatePromotionCopy);

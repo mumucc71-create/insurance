@@ -990,6 +990,10 @@ body.promotion-mode .app {
   user-select: none;
 }
 
+.phone-consultation-memo-canvas-wrap.is-eraser-mode canvas {
+  cursor: pointer;
+}
+
 @media (max-width: 720px) {
   .phone-consultation-memo-heading {
     align-items: flex-start;
