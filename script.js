@@ -5817,7 +5817,7 @@ async function hydrateFromCloud() {
       writeJsonStorage(designManagerKey, mergedDesignManagers, {
         context: "클라우드 보험사 캐시",
       });
-      if (mergedDesignManagers.length > cloudRow.draft.designManagers.length) {
+      if (mergedDesignManagers.length !== cloudRow.draft.designManagers.length) {
         shouldPushAfterHydrate = true;
       }
     } else {
