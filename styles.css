@@ -909,7 +909,18 @@ body.promotion-mode .app {
 }
 
 .phone-consultation-saved-memos {
+  position: sticky;
+  top: 8px;
+  z-index: 12;
+  max-height: min(46vh, 430px);
   margin-bottom: 16px;
+  padding: 10px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 8px 22px rgba(23, 32, 27, 0.14);
 }
 
 .phone-consultation-saved-label {
@@ -1002,6 +1013,12 @@ body.promotion-mode .app {
 
   .phone-consultation-highlight-tools {
     justify-content: flex-start;
+  }
+
+  .phone-consultation-saved-memos {
+    top: 4px;
+    max-height: 52vh;
+    padding: 8px;
   }
 }
 
