@@ -269,6 +269,7 @@ let currentSession = null;
 let isHydratingCloud = false;
 let hasCloudHydrated = false;
 let localMode = false;
+let browserStorageQuotaExceeded = false;
 let activeUserId = "";
 let authSettings = null;
 let selectedDesignManagerRow = null;
@@ -539,7 +540,9 @@ function buildLocalSession(account) {
 
 function saveLocalSession(session) {
   if (session) {
-    localStorage.setItem(localSessionStorageKey, JSON.stringify(session));
+    writeJsonStorage(localSessionStorageKey, session, {
+      context: "이 기기 로그인 세션",
+    });
   } else {
     localStorage.removeItem(localSessionStorageKey);
   }
@@ -579,7 +582,9 @@ function resolveLocalAccountFromSession(session) {
     createdAt: new Date().toISOString(),
   };
   accounts.push(recoveredAccount);
-  localStorage.setItem(localAccountStorageKey, JSON.stringify(accounts));
+  writeJsonStorage(localAccountStorageKey, accounts, {
+    context: "이 기기 계정",
+  });
   return recoveredAccount;
 }
 
@@ -694,9 +699,25 @@ function recoverStoredCustomersManually() {
   );
 }
 
+function buildPersistedDraftSnapshot(draft) {
+  if (!draft || typeof draft !== "object") return null;
+  if (localMode || isLocalAuthSession(currentSession)) return draft;
+
+  return {
+    selectedId: draft.selectedId || "",
+    updatedAt: draft.updatedAt || new Date().toISOString(),
+    state: draft.state || null,
+    universeDisclosureText: draft.universeDisclosureText || "",
+    medicalAnalysisJson: draft.medicalAnalysisJson ?? null,
+  };
+}
+
 function persistDraftSnapshot(draft) {
-  if (!draft || typeof draft !== "object") return;
-  localStorage.setItem(getScopedStorageKey(autoSaveDraftKey), JSON.stringify(draft));
+  const snapshot = buildPersistedDraftSnapshot(draft);
+  if (!snapshot) return false;
+  return writeJsonStorage(getScopedStorageKey(autoSaveDraftKey), snapshot, {
+    context: "자동 저장 초안",
+  });
 }
 
 function getScopedStorageKey(baseKey) {
@@ -713,7 +734,9 @@ function getStoredCustomers() {
 }
 
 function setStoredCustomers(customers) {
-  localStorage.setItem(getScopedStorageKey(customerStorageKey), JSON.stringify(customers));
+  writeJsonStorage(getScopedStorageKey(customerStorageKey), customers, {
+    context: "고객 목록",
+  });
   scheduleCloudSync();
 }
 
@@ -729,15 +752,16 @@ function rememberUiSession(extra = {}) {
   if (!currentSession?.user?.id) return;
   const previous = readJsonStorage(getScopedStorageKey(uiSessionStorageKey), {});
   const selectedId = savedCustomerSelect?.value || previous.selectedId || "";
-  localStorage.setItem(
+  writeJsonStorage(
     getScopedStorageKey(uiSessionStorageKey),
-    JSON.stringify({
+    {
       ...previous,
       selectedId,
       viewMode: getCurrentViewMode(),
       updatedAt: new Date().toISOString(),
       ...extra,
-    }),
+    },
+    { context: "화면 상태" },
   );
 }
 
@@ -753,7 +777,9 @@ function setCustomerManagerCollapsed(collapsed, persist = true) {
     toggleCustomerManagerButton.setAttribute("aria-expanded", collapsed ? "false" : "true");
   }
   if (persist) {
-    localStorage.setItem(customerManagerCollapsedStorageKey, collapsed ? "1" : "0");
+    writeLocalStorage(customerManagerCollapsedStorageKey, collapsed ? "1" : "0", {
+      context: "고객관리 접기 상태",
+    });
   }
 }
 
@@ -859,12 +885,14 @@ function showManagerStatus(message) {
 }
 
 function setSyncStatus(message, details = {}) {
-  const text = `동기화 상태: ${message}`;
+  const storageWarning = browserStorageQuotaExceeded ? " · 브라우저 저장공간 부족" : "";
+  const text = `동기화 상태: ${message}${storageWarning}`;
   if (syncStatus) syncStatus.textContent = text;
   console.info("[sync]", message, {
     userId: currentSession?.user?.id || "",
     hasCloudHydrated,
     isHydratingCloud,
+    browserStorageQuotaExceeded,
     ...details,
   });
 }
@@ -1058,7 +1086,9 @@ function saveCloudSession(session) {
   if (session) {
     const serialized = JSON.stringify(session);
     try {
-      localStorage.setItem(cloudSessionStorageKey, serialized);
+      writeLocalStorage(cloudSessionStorageKey, serialized, {
+        context: "클라우드 로그인 세션",
+      });
     } catch (error) {
       console.warn("[auth] local cloud session save failed", error);
     }
@@ -1199,19 +1229,17 @@ function recoverPhoneConsultationMemosToCurrentAccount() {
 
   const result = sortPhoneConsultationMemos([...merged.values()]);
   if (result.length) {
-    localStorage.setItem(scopedKey, JSON.stringify(result));
+    writeJsonStorage(scopedKey, result, {
+      context: "전화상담 메모 복구",
+    });
   }
   return result.length ? result : getStoredPhoneConsultationMemos();
 }
 
 function setStoredPhoneConsultationMemos(memos) {
-  try {
-    localStorage.setItem(getScopedStorageKey(phoneConsultationStorageKey), JSON.stringify(memos));
-    return true;
-  } catch (error) {
-    console.error("[phone-memo] save failed", error);
-    return false;
-  }
+  return writeJsonStorage(getScopedStorageKey(phoneConsultationStorageKey), memos, {
+    context: "전화상담 메모",
+  });
 }
 
 function getStoredPhoneConsultationCommonTemplate() {
@@ -1230,14 +1258,21 @@ function getStoredPhoneConsultationCommonTemplateUpdatedAt() {
 }
 
 function setStoredPhoneConsultationCommonTemplate(content, { updatedAt = "", touch = true } = {}) {
-  localStorage.setItem(getScopedStorageKey(phoneConsultationCommonTemplateStorageKey), JSON.stringify(String(content ?? "")));
+  const contentSaved = writeJsonStorage(
+    getScopedStorageKey(phoneConsultationCommonTemplateStorageKey),
+    String(content ?? ""),
+    { context: "전화상담 공통 양식" },
+  );
   const timestamp = updatedAt || (touch ? new Date().toISOString() : "");
+  let timestampSaved = true;
   if (timestamp) {
-    localStorage.setItem(
+    timestampSaved = writeJsonStorage(
       getScopedStorageKey(phoneConsultationCommonTemplateUpdatedAtStorageKey),
-      JSON.stringify(timestamp),
+      timestamp,
+      { context: "전화상담 공통 양식 수정 시각" },
     );
   }
+  return contentSaved && timestampSaved;
 }
 
 function getStoredPhoneConsultationCommonHighlight() {
@@ -1245,9 +1280,10 @@ function getStoredPhoneConsultationCommonHighlight() {
 }
 
 function setStoredPhoneConsultationCommonHighlight(imageDataUrl) {
-  localStorage.setItem(
+  return writeJsonStorage(
     getScopedStorageKey(phoneConsultationCommonTemplateHighlightStorageKey),
-    JSON.stringify(String(imageDataUrl || "")),
+    String(imageDataUrl || ""),
+    { context: "전화상담 공통 형광펜 이미지" },
   );
 }
 
@@ -1257,9 +1293,10 @@ function getStoredPhoneConsultationCommonHighlightStrokes() {
 }
 
 function setStoredPhoneConsultationCommonHighlightStrokes(strokes) {
-  localStorage.setItem(
+  return writeJsonStorage(
     getScopedStorageKey(phoneConsultationCommonTemplateHighlightStrokesStorageKey),
-    JSON.stringify(Array.isArray(strokes) ? strokes : []),
+    Array.isArray(strokes) ? strokes : [],
+    { context: "전화상담 공통 형광펜 선" },
   );
 }
 
@@ -1297,7 +1334,11 @@ function getStoredPhoneConsultationDrafts() {
 }
 
 function setStoredPhoneConsultationDrafts(drafts) {
-  localStorage.setItem(getScopedStorageKey(phoneConsultationDraftStorageKey), JSON.stringify(drafts && typeof drafts === "object" ? drafts : {}));
+  return writeJsonStorage(
+    getScopedStorageKey(phoneConsultationDraftStorageKey),
+    drafts && typeof drafts === "object" ? drafts : {},
+    { context: "전화상담 작성 중 메모" },
+  );
 }
 
 function getStoredPhoneConsultationOrders() {
@@ -1306,7 +1347,11 @@ function getStoredPhoneConsultationOrders() {
 }
 
 function setStoredPhoneConsultationOrders(orders) {
-  localStorage.setItem(getScopedStorageKey(phoneConsultationOrderStorageKey), JSON.stringify(orders && typeof orders === "object" ? orders : {}));
+  return writeJsonStorage(
+    getScopedStorageKey(phoneConsultationOrderStorageKey),
+    orders && typeof orders === "object" ? orders : {},
+    { context: "전화상담 메모 순서" },
+  );
 }
 
 const phoneConsultationGlobalLayoutKey = "__global_phone_memo_layout__";
@@ -2671,7 +2716,11 @@ function getStoredPromotionPosts() {
 }
 
 function setStoredPromotionPosts(posts) {
-  localStorage.setItem(getScopedStorageKey(promotionPostsStorageKey), JSON.stringify(Array.isArray(posts) ? posts : []));
+  return writeJsonStorage(
+    getScopedStorageKey(promotionPostsStorageKey),
+    Array.isArray(posts) ? posts : [],
+    { context: "홍보글" },
+  );
 }
 
 function mergePromotionPosts(...postLists) {
@@ -2813,14 +2862,14 @@ function getStoredPromotionImageSignature() {
 }
 
 function savePromotionImageSignature() {
-  localStorage.setItem(promotionImageSignatureStorageKey, JSON.stringify({
+  writeJsonStorage(promotionImageSignatureStorageKey, {
     message: promotionImageMessageInput?.value || "",
     textColor: promotionTextColorInput?.value || "#ffd400",
     boxColor: promotionBoxColorInput?.value || "#000000",
     shapeColor: promotionShapeColorInput?.value || "#39a95b",
     toolColor: getPromotionCurrentColor(),
     toolOpacity: Math.round(getPromotionCurrentOpacity() * 100),
-  }));
+  }, { context: "홍보 이미지 서명" });
 }
 
 function restorePromotionImageSignature() {
@@ -3316,7 +3365,11 @@ function getStoredPromotionColorPalette() {
 }
 
 function setStoredPromotionColorPalette(palette) {
-  localStorage.setItem(getScopedStorageKey(promotionColorPaletteStorageKey), JSON.stringify(Array.isArray(palette) ? palette : []));
+  return writeJsonStorage(
+    getScopedStorageKey(promotionColorPaletteStorageKey),
+    Array.isArray(palette) ? palette : [],
+    { context: "홍보 색상표" },
+  );
 }
 
 function setPromotionToolColor(color, { applyReplacement = true, armPicker = false } = {}) {
@@ -3810,7 +3863,11 @@ function getStoredPromotionImages() {
 }
 
 function setStoredPromotionImages(images) {
-  localStorage.setItem(getScopedStorageKey(promotionSavedImagesStorageKey), JSON.stringify(Array.isArray(images) ? images : []));
+  return writeJsonStorage(
+    getScopedStorageKey(promotionSavedImagesStorageKey),
+    Array.isArray(images) ? images : [],
+    { context: "홍보 이미지 목록" },
+  );
 }
 
 function openPromotionImageDatabase() {
@@ -4225,7 +4282,11 @@ function getStoredPromotionCases() {
 }
 
 function setStoredPromotionCases(cases) {
-  localStorage.setItem(getScopedStorageKey(promotionCasesStorageKey), JSON.stringify(Array.isArray(cases) ? cases : []));
+  return writeJsonStorage(
+    getScopedStorageKey(promotionCasesStorageKey),
+    Array.isArray(cases) ? cases : [],
+    { context: "홍보 사례" },
+  );
 }
 
 function renderPromotionCaseList() {
@@ -4303,7 +4364,11 @@ function getStoredPromotionIdeas() {
 }
 
 function setStoredPromotionIdeas(ideas) {
-  localStorage.setItem(getScopedStorageKey(promotionIdeasStorageKey), JSON.stringify(Array.isArray(ideas) ? ideas : []));
+  return writeJsonStorage(
+    getScopedStorageKey(promotionIdeasStorageKey),
+    Array.isArray(ideas) ? ideas : [],
+    { context: "홍보 아이디어" },
+  );
 }
 
 function renderPromotionIdeaList() {
@@ -4522,7 +4587,11 @@ function getSelectedPromotionEmojis() {
 }
 
 function setSelectedPromotionEmojis(emojis) {
-  localStorage.setItem(getScopedStorageKey(promotionSelectedEmojisStorageKey), JSON.stringify(Array.isArray(emojis) ? emojis : []));
+  return writeJsonStorage(
+    getScopedStorageKey(promotionSelectedEmojisStorageKey),
+    Array.isArray(emojis) ? emojis : [],
+    { context: "홍보 이모지" },
+  );
 }
 
 function getPromotionEmojiLine() {
@@ -5009,6 +5078,40 @@ function getPhoneAuthPassword() {
   return `Insure-${normalizeAuthPhone(authPhone.value)}-${encodeURIComponent(normalizeAuthName(authName.value))}`;
 }
 
+function isStorageQuotaError(error) {
+  return error?.name === "QuotaExceededError"
+    || error?.name === "NS_ERROR_DOM_QUOTA_REACHED"
+    || error?.code === 22
+    || error?.code === 1014;
+}
+
+function writeLocalStorage(key, value, { context = "브라우저 캐시" } = {}) {
+  try {
+    localStorage.setItem(key, value);
+    return true;
+  } catch (error) {
+    if (isStorageQuotaError(error)) {
+      browserStorageQuotaExceeded = true;
+      console.warn(`[storage] ${context} 저장 공간 부족: 클라우드 동기화는 계속합니다.`, {
+        key,
+      });
+      return false;
+    }
+
+    console.warn(`[storage] ${context} 저장 실패`, { key, error });
+    return false;
+  }
+}
+
+function writeJsonStorage(key, value, options) {
+  try {
+    return writeLocalStorage(key, JSON.stringify(value), options);
+  } catch (error) {
+    console.warn("[storage] JSON 변환 실패", { key, error });
+    return false;
+  }
+}
+
 function readJsonStorage(key, fallback = null) {
   try {
     return JSON.parse(localStorage.getItem(key)) ?? fallback;
@@ -5077,7 +5180,9 @@ function addPendingDeletedCustomerId(customerId) {
   if (!customerId) return;
   const deletedIds = new Set(getPendingDeletedCustomerIds());
   deletedIds.add(customerId);
-  localStorage.setItem(getScopedStorageKey(deletedCustomersStorageKey), JSON.stringify([...deletedIds]));
+  writeJsonStorage(getScopedStorageKey(deletedCustomersStorageKey), [...deletedIds], {
+    context: "삭제 대기 고객",
+  });
 }
 
 function clearPendingDeletedCustomerIds() {
@@ -5214,10 +5319,14 @@ function recoverAllStoredDataToCurrentAccount({ quiet = false } = {}) {
   const recoveredMemoCount = Math.max(0, phoneMemos.length - existingPhoneMemoCount);
 
   if (mergedCustomers.length) {
-    localStorage.setItem(customerKey, JSON.stringify(mergedCustomers));
+    writeJsonStorage(customerKey, mergedCustomers, {
+      context: "고객 목록 복구",
+    });
   }
   if (mergedDesignManagers.length) {
-    localStorage.setItem(designManagerKey, JSON.stringify(mergedDesignManagers));
+    writeJsonStorage(designManagerKey, mergedDesignManagers, {
+      context: "보험사 목록 복구",
+    });
   }
   if (mergedDraft) {
     persistDraftSnapshot(mergedDraft);
@@ -5319,7 +5428,9 @@ async function signupLocalAccount() {
     createdAt: new Date().toISOString(),
   };
   accounts.push(account);
-  localStorage.setItem(localAccountStorageKey, JSON.stringify(accounts));
+  writeJsonStorage(localAccountStorageKey, accounts, {
+    context: "이 기기 계정",
+  });
   openLocalAccount(account);
   showManagerStatus(`${name}님 회원가입이 완료되었습니다. 고객 목록을 불러왔습니다.`);
   authStatus.textContent = "이 기기 저장 계정으로 회원가입했습니다.";
@@ -5547,8 +5658,12 @@ async function pushCloudSnapshot() {
     showManagerStatus(`클라우드 저장 실패: ${error.message}`);
     return false;
   } else {
-    localStorage.setItem(getScopedStorageKey(customerStorageKey), JSON.stringify(mergedCustomers));
-    localStorage.setItem(getScopedStorageKey(designManagerStorageKey), JSON.stringify(mergedDesignManagers));
+    writeJsonStorage(getScopedStorageKey(customerStorageKey), mergedCustomers, {
+      context: "클라우드 고객 캐시",
+    });
+    writeJsonStorage(getScopedStorageKey(designManagerStorageKey), mergedDesignManagers, {
+      context: "클라우드 보험사 캐시",
+    });
     setStoredPhoneConsultationMemos(mergedPhoneMemos);
     setStoredPhoneConsultationCommonTemplate(phoneTemplate, {
       updatedAt: phoneTemplateUpdatedAt,
@@ -5645,8 +5760,12 @@ async function hydrateFromCloud() {
 
   if (error) {
     const mergedCustomers = mergeCustomers(scopedCustomers, legacyCustomers);
-    localStorage.setItem(customerKey, JSON.stringify(mergedCustomers));
-    localStorage.setItem(designManagerKey, JSON.stringify(mergeDesignManagers(scopedDesignManagers, legacyDesignManagers)));
+    writeJsonStorage(customerKey, mergedCustomers, {
+      context: "고객 캐시",
+    });
+    writeJsonStorage(designManagerKey, mergeDesignManagers(scopedDesignManagers, legacyDesignManagers), {
+      context: "보험사 캐시",
+    });
     const fallbackDraft = mergeDraftSnapshots(scopedDraft, legacyDraft);
     if (fallbackDraft) {
       persistDraftSnapshot(fallbackDraft);
@@ -5670,7 +5789,9 @@ async function hydrateFromCloud() {
     console.info("[sync] 로그인 직후 로컬 캐시 customers 개수", scopedCustomers.length);
     console.info("[sync] 로그인 직후 legacy local customers 개수", legacyCustomers.length);
     console.info("[sync] 로그인 직후 병합 후 customers 개수", mergedCustomers.length);
-    localStorage.setItem(customerKey, JSON.stringify(mergedCustomers));
+    writeJsonStorage(customerKey, mergedCustomers, {
+      context: "클라우드 고객 캐시",
+    });
 
     if (mergedCustomers.length > cloudCustomers.length) {
       shouldPushAfterHydrate = true;
@@ -5688,14 +5809,18 @@ async function hydrateFromCloud() {
 
     if (Array.isArray(cloudRow.draft?.designManagers)) {
       const mergedDesignManagers = mergeDesignManagers(cloudRow.draft.designManagers, scopedDesignManagers, legacyDesignManagers);
-      localStorage.setItem(designManagerKey, JSON.stringify(mergedDesignManagers));
+      writeJsonStorage(designManagerKey, mergedDesignManagers, {
+        context: "클라우드 보험사 캐시",
+      });
       if (mergedDesignManagers.length > cloudRow.draft.designManagers.length) {
         shouldPushAfterHydrate = true;
       }
     } else {
       const preservedDesignManagers = mergeDesignManagers(scopedDesignManagers, legacyDesignManagers);
       if (preservedDesignManagers.length) {
-        localStorage.setItem(designManagerKey, JSON.stringify(preservedDesignManagers));
+        writeJsonStorage(designManagerKey, preservedDesignManagers, {
+          context: "보험사 캐시",
+        });
         shouldPushAfterHydrate = true;
       }
     }
@@ -5705,8 +5830,12 @@ async function hydrateFromCloud() {
     console.info("[sync] 로그인 직후 로컬 캐시 customers 개수", scopedCustomers.length);
     console.info("[sync] 로그인 직후 legacy local customers 개수", legacyCustomers.length);
     console.info("[sync] 로그인 직후 병합 후 customers 개수", mergedCustomers.length);
-    localStorage.setItem(customerKey, JSON.stringify(mergedCustomers));
-    localStorage.setItem(designManagerKey, JSON.stringify(mergeDesignManagers(scopedDesignManagers, legacyDesignManagers)));
+    writeJsonStorage(customerKey, mergedCustomers, {
+      context: "고객 캐시",
+    });
+    writeJsonStorage(designManagerKey, mergeDesignManagers(scopedDesignManagers, legacyDesignManagers), {
+      context: "보험사 캐시",
+    });
     const migrationDraft = mergeDraftSnapshots(scopedDraft, legacyDraft);
     if (migrationDraft) {
       persistDraftSnapshot(migrationDraft);
@@ -6509,7 +6638,9 @@ function collectDesignManagers() {
 }
 
 function saveDesignManagers() {
-  localStorage.setItem(getScopedStorageKey(designManagerStorageKey), JSON.stringify(collectDesignManagers()));
+  writeJsonStorage(getScopedStorageKey(designManagerStorageKey), collectDesignManagers(), {
+    context: "보험사 목록",
+  });
   scheduleCloudSync();
 }
 
@@ -9272,26 +9403,23 @@ function renderSavedCustomerList(selectedId = "") {
 
 function saveAutoDraft(state = collectCustomerState()) {
   const existingDraft = readJsonStorage(getScopedStorageKey(autoSaveDraftKey), {});
-  localStorage.setItem(
-    getScopedStorageKey(autoSaveDraftKey),
-    JSON.stringify({
-      ...existingDraft,
-      selectedId: savedCustomerSelect.value,
-      updatedAt: new Date().toISOString(),
-      state,
-      designManagers: getStoredDesignManagers(),
-      phoneConsultationMemos: getStoredPhoneConsultationMemos(),
-      phoneConsultationCommonTemplate: getStoredPhoneConsultationCommonTemplate(),
-      phoneConsultationCommonTemplateUpdatedAt: getStoredPhoneConsultationCommonTemplateUpdatedAt(),
-      phoneConsultationCommonHighlight: getStoredPhoneConsultationCommonHighlight(),
-      phoneConsultationCommonHighlightStrokes: getStoredPhoneConsultationCommonHighlightStrokes(),
-      phoneConsultationDrafts: getStoredPhoneConsultationDrafts(),
-      phoneConsultationOrders: getStoredPhoneConsultationOrders(),
-      promotionPosts: getStoredPromotionPosts(),
-      universeDisclosureText,
-      medicalAnalysisJson,
-    }),
-  );
+  persistDraftSnapshot({
+    ...existingDraft,
+    selectedId: savedCustomerSelect.value,
+    updatedAt: new Date().toISOString(),
+    state,
+    designManagers: getStoredDesignManagers(),
+    phoneConsultationMemos: getStoredPhoneConsultationMemos(),
+    phoneConsultationCommonTemplate: getStoredPhoneConsultationCommonTemplate(),
+    phoneConsultationCommonTemplateUpdatedAt: getStoredPhoneConsultationCommonTemplateUpdatedAt(),
+    phoneConsultationCommonHighlight: getStoredPhoneConsultationCommonHighlight(),
+    phoneConsultationCommonHighlightStrokes: getStoredPhoneConsultationCommonHighlightStrokes(),
+    phoneConsultationDrafts: getStoredPhoneConsultationDrafts(),
+    phoneConsultationOrders: getStoredPhoneConsultationOrders(),
+    promotionPosts: getStoredPromotionPosts(),
+    universeDisclosureText,
+    medicalAnalysisJson,
+  });
 }
 
 function upsertAutoSavedCustomer(state) {
