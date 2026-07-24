@@ -240,6 +240,7 @@ let activePhoneConsultationCustomerId = "";
 let viewedPhoneConsultationMemoId = "";
 let draggedPhoneConsultationMemoId = "";
 let phoneConsultationMemoDragMoved = false;
+let phoneConsultationMemoDeleteLockedUntil = 0;
 let phoneConsultationHighlightMode = false;
 let phoneConsultationHighlightDrawing = false;
 let phoneConsultationHighlightColor = "#ffe45c";
@@ -2564,32 +2565,45 @@ function reorderPhoneConsultationMemos(draggedId, targetId = "", targetGroup = "
   if (!draggedId) return;
 
   const memos = getOrderedPhoneConsultationMemos();
-  const draggedIndex = memos.findIndex((memo) => memo.id === draggedId);
-  if (draggedIndex < 0) return;
-
+  const originalIds = memos.map((memo) => memo.id);
   const groupOverrides = { ...getPhoneConsultationGroupOverridesForCustomer() };
-  const normalizedTargetGroup = ["claim", "coverage", "general"].includes(targetGroup) ? targetGroup : "";
-  if (normalizedTargetGroup) groupOverrides[draggedId] = normalizedTargetGroup;
+  const draggedMemo = memos.find((memo) => memo.id === draggedId);
+  if (!draggedMemo) return;
 
-  const [draggedMemo] = memos.splice(draggedIndex, 1);
-  if (targetId && targetId !== draggedId) {
-    const targetIndex = memos.findIndex((memo) => memo.id === targetId);
-    if (targetIndex >= 0) {
-      memos.splice(targetIndex, 0, draggedMemo);
-    } else {
-      memos.push(draggedMemo);
-    }
-  } else if (normalizedTargetGroup) {
-    const lastIndexInGroup = memos.reduce((lastIndex, memo, index) => (
-      getPhoneConsultationMemoGroup(memo, groupOverrides) === normalizedTargetGroup ? index : lastIndex
-    ), -1);
-    memos.splice(lastIndexInGroup + 1, 0, draggedMemo);
+  const groupIds = ["claim", "coverage", "general"];
+  const sourceGroup = getPhoneConsultationMemoGroup(draggedMemo, groupOverrides);
+  const normalizedTargetGroup = groupIds.includes(targetGroup) ? targetGroup : sourceGroup;
+  const groupedMemos = Object.fromEntries(groupIds.map((groupId) => [
+    groupId,
+    memos.filter((memo) => memo.id !== draggedId
+      && getPhoneConsultationMemoGroup(memo, groupOverrides) === groupId),
+  ]));
+
+  groupOverrides[draggedId] = normalizedTargetGroup;
+  const targetMemos = groupedMemos[normalizedTargetGroup];
+  const targetIndex = targetId && targetId !== draggedId
+    ? targetMemos.findIndex((memo) => memo.id === targetId)
+    : -1;
+  if (targetIndex >= 0) {
+    targetMemos.splice(targetIndex, 0, draggedMemo);
   } else {
-    memos.push(draggedMemo);
+    targetMemos.push(draggedMemo);
   }
 
-  savePhoneConsultationLayoutForCustomer(memos.map((memo) => memo.id), groupOverrides);
+  const reorderedMemos = groupIds.flatMap((groupId) => groupedMemos[groupId]);
+  const reorderedIds = reorderedMemos.map((memo) => memo.id);
+  const preservedEveryMemo = originalIds.length === reorderedIds.length
+    && originalIds.every((id) => reorderedIds.includes(id));
+  if (!preservedEveryMemo) {
+    phoneConsultationMemoList?.classList.remove("is-reordering");
+    showPhoneConsultationStatus("메모가 누락될 수 있어 순서 변경을 취소했습니다.");
+    renderPhoneConsultationMemoButtons(viewedPhoneConsultationMemoId);
+    return;
+  }
 
+  savePhoneConsultationLayoutForCustomer(reorderedIds, groupOverrides);
+
+  phoneConsultationMemoList?.classList.remove("is-reordering");
   renderPhoneConsultationMemoButtons(viewedPhoneConsultationMemoId);
   scheduleCloudSync();
   showPhoneConsultationStatus("저장된 메모 순서를 바꿨습니다.");
@@ -10060,6 +10074,7 @@ function bindApplicationUiEvents() {
     if (deleteButton) {
       event.preventDefault();
       event.stopPropagation();
+      if (Date.now() < phoneConsultationMemoDeleteLockedUntil) return;
       deletePhoneConsultationMemoById(deleteButton.dataset.memoDeleteId);
       return;
     }
@@ -10085,6 +10100,8 @@ function bindApplicationUiEvents() {
     if (!button) return;
     draggedPhoneConsultationMemoId = button.dataset.memoId;
     phoneConsultationMemoDragMoved = true;
+    phoneConsultationMemoDeleteLockedUntil = Date.now() + 800;
+    phoneConsultationMemoList.classList.add("is-reordering");
     button.classList.add("is-dragging");
     event.dataTransfer.effectAllowed = "move";
     event.dataTransfer.setData("text/plain", draggedPhoneConsultationMemoId);
@@ -10113,6 +10130,7 @@ function bindApplicationUiEvents() {
     });
     const draggedId = event.dataTransfer.getData("text/plain") || draggedPhoneConsultationMemoId;
     const targetGroup = dropZone.dataset.memoDropGroup || dropZone.dataset.memoGroup || "";
+    phoneConsultationMemoDeleteLockedUntil = Date.now() + 800;
     reorderPhoneConsultationMemos(draggedId, button?.dataset.memoId || "", targetGroup);
   });
   safeOn(phoneConsultationMemoList, "dragend", () => {
@@ -10120,6 +10138,8 @@ function bindApplicationUiEvents() {
       button.classList.remove("is-dragging", "is-drop-target");
     });
     draggedPhoneConsultationMemoId = "";
+    phoneConsultationMemoDeleteLockedUntil = Date.now() + 800;
+    phoneConsultationMemoList.classList.remove("is-reordering");
     window.setTimeout(() => {
       phoneConsultationMemoDragMoved = false;
     }, 50);

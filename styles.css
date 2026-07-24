@@ -1102,6 +1102,11 @@ body.promotion-mode .app {
   color: #ffffff;
 }
 
+.phone-consultation-memo-list.is-reordering .phone-consultation-memo-delete {
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .phone-consultation-memo-column.is-drop-target,
 .phone-consultation-memo-column-buttons.is-drop-target {
   border-color: var(--focus);
