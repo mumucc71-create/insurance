@@ -1199,6 +1199,10 @@ function getStoredPhoneConsultationMemos() {
   return Array.isArray(memos) ? memos : [];
 }
 
+function isDeletedPhoneConsultationMemo(memo) {
+  return Boolean(memo?.deletedAt);
+}
+
 function recoverPhoneConsultationMemosToCurrentAccount() {
   if (!currentSession?.user?.id) return getStoredPhoneConsultationMemos();
 
@@ -2209,9 +2213,14 @@ function savePhoneConsultationCommonTemplateAsMemo(content, highlightImage = "",
 
   const memos = recoverPhoneConsultationMemosToCurrentAccount();
   const now = new Date().toISOString();
-  let memo = memos.find((item) => item.source === "common-template" && item.title === title);
+  let memo = memos.find((item) => !isDeletedPhoneConsultationMemo(item)
+    && item.source === "common-template"
+    && item.title === title);
   if (!memo) {
-    memo = memos.find((item) => !item.source && item.title === title && item.content === content);
+    memo = memos.find((item) => !isDeletedPhoneConsultationMemo(item)
+      && !item.source
+      && item.title === title
+      && item.content === content);
   }
 
   if (memo) {
@@ -2337,7 +2346,7 @@ function getNextPhoneConsultationSortOrder(memos) {
 
 function getOrderedPhoneConsultationMemos(customerId = savedCustomerSelect?.value || activePhoneConsultationCustomerId || "") {
   return sortPhoneConsultationMemos(
-    recoverPhoneConsultationMemosToCurrentAccount(),
+    recoverPhoneConsultationMemosToCurrentAccount().filter((memo) => !isDeletedPhoneConsultationMemo(memo)),
     getPhoneConsultationOrderForCustomer(customerId),
   );
 }
@@ -2632,7 +2641,8 @@ function savePhoneConsultationMemo() {
 
   const memos = recoverPhoneConsultationMemosToCurrentAccount();
   const now = new Date().toISOString();
-  const existing = memos.find((memo) => memo.id === activePhoneConsultationId);
+  const existing = memos.find((memo) => memo.id === activePhoneConsultationId
+    && !isDeletedPhoneConsultationMemo(memo));
   if (existing) {
     existing.title = title;
     existing.content = content;
@@ -2669,10 +2679,29 @@ function deletePhoneConsultationMemoById(memoId) {
     return;
   }
 
-  const memo = recoverPhoneConsultationMemosToCurrentAccount().find((item) => item.id === memoId);
+  const memos = recoverPhoneConsultationMemosToCurrentAccount();
+  const memo = memos.find((item) => item.id === memoId && !isDeletedPhoneConsultationMemo(item));
   if (memo && !confirm(`"${memo.title || "제목 없음"}" 메모를 삭제할까요?`)) return;
 
-  const memos = getStoredPhoneConsultationMemos().filter((item) => item.id !== memoId);
+  const deletedAt = new Date().toISOString();
+  const tombstoneIndex = memos.findIndex((item) => item.id === memoId);
+  const tombstone = {
+    id: memoId,
+    title: "",
+    content: "",
+    highlightImage: "",
+    highlightStrokes: [],
+    source: memo?.source || "",
+    sortOrder: memo?.sortOrder,
+    createdAt: memo?.createdAt || deletedAt,
+    updatedAt: deletedAt,
+    deletedAt,
+  };
+  if (tombstoneIndex >= 0) {
+    memos[tombstoneIndex] = tombstone;
+  } else {
+    memos.push(tombstone);
+  }
   if (!setStoredPhoneConsultationMemos(memos)) {
     showPhoneConsultationStatus("메모 삭제에 실패했습니다.");
     return;
