@@ -123,7 +123,6 @@ const output = document.querySelector("#customerCopyText") || document.querySele
 const universeFileUploadButton = document.querySelector("#universeFileUploadButton");
 const universeFileInput = document.querySelector("#universeFileInput");
 const copyButton = document.querySelector("#copyButton");
-const kakaoCopyButton = document.querySelector("#kakaoCopyButton");
 const insurerCopyButton = document.querySelector("#insurerCopyButton");
 const pdfButton = document.querySelector("#pdfButton");
 const excelButton = document.querySelector("#excelButton");
@@ -7274,7 +7273,7 @@ function buildDesignDirectionLines() {
     return [];
   }
 
-  const lines = ["[설계 요청사항]", ""];
+  const lines = [];
 
   if (premium) {
     lines.push(`희망 보험료: ${premium}`, "");
@@ -8798,12 +8797,19 @@ function detectDisclosureItems(groupedRecords, options = {}) {
     const dbSurgeryGroup = /수술/.test(group.dbDisease?.disclosureGroup || "");
     const medicationInfo = getMedicationDaysForGroup(group, medicationLogs);
     const dbLongMedication = group.dbDisease?.disclosureGroup === "30일 이상 투약" && group.dbDisease?.chronic;
+    const isDentalGroup = group.dbDisease?.category === "치과질환" || /치주염|잇몸질환/.test(group.name);
     const reasons = [];
 
     if (medicationInfo.days >= 30 || dbLongMedication) reasons.push("30일 이상 투약");
     if (hospitalVisitDates.size >= 7) reasons.push("7일 이상 치료");
     if (hasAdmission) reasons.push("입원");
     if (hasSurgery || dbSurgeryGroup) reasons.push("수술");
+
+    // 여러 해에 걸친 치과 통원 횟수만으로는 7일 이상 치료나 입원으로 확정하지 않는다.
+    if (isDentalGroup && !hasSurgery && !dbSurgeryGroup && medicationInfo.days < 30) {
+      reviewItems.push(buildReviewFromGroup(group));
+      return;
+    }
 
     if (!reasons.length) {
       reviewItems.push(buildReviewFromGroup(group));
@@ -9072,8 +9078,49 @@ function buildUniverseDisclosureLines() {
     return lines;
   }
 
-  lines.push("", universeDisclosureText.trim());
+  const sanitizedText = sanitizeUniverseDisclosureForCustomerCopy(universeDisclosureText);
+  lines.push("", sanitizedText || "고지대상으로 확인된 항목 없음");
   return lines;
+}
+
+function sanitizeUniverseDisclosureForCustomerCopy(text) {
+  const source = String(text ?? "").replace(/\r\n?/g, "\n").trim();
+  if (!source) return "";
+
+  const sectionPattern = /^\[(3개월 이내|5년 이내|10년 이내|자동 제외 또는 검토 필요)\]\s*$/gm;
+  const matches = [...source.matchAll(sectionPattern)];
+  if (!matches.length) return source;
+
+  const prefix = source.slice(0, matches[0].index).trim();
+  const outputSections = [];
+
+  matches.forEach((match, index) => {
+    const title = match[1];
+    const start = match.index + match[0].length;
+    const end = matches[index + 1]?.index ?? source.length;
+    let body = source.slice(start, end).trim();
+
+    if (/^(3개월 이내|5년 이내|10년 이내)$/.test(title)) {
+      const blocks = body.split(/(?=^\d+\.\s)/m);
+      body = blocks
+        .filter((block) => {
+          const dentalVisitOnly = /치주염|잇몸질환/.test(block)
+            && /7일 이상 치료/.test(block)
+            && !/수술명|통원수술|입원수술|30일 이상 투약|약물복용:/.test(block);
+          return !dentalVisitOnly;
+        })
+        .join("")
+        .trim();
+
+      const hasDisclosureItem = /^\d+\.\s/m.test(body);
+      if (!hasDisclosureItem && title !== "3개월 이내") return;
+      if (!hasDisclosureItem) body = "고지사항 없음";
+    }
+
+    if (body) outputSections.push(`[${title}]\n${body}`);
+  });
+
+  return [prefix, ...outputSections].filter(Boolean).join("\n\n").trim();
 }
 
 function insertDisclosureToCustomerCopy(text) {
@@ -9155,10 +9202,10 @@ function buildOutput({ insurerMode = false } = {}) {
     }
   }
 
-  lines.push("3. 설계", "");
+  lines.push("3. 설계 요청사항", "");
 
   if (requestText) {
-    lines.push(requestText, "");
+    lines.push(`설계 목적: ${requestText}`, "");
   }
 
   if (designDirectionLines.length) {
@@ -9173,7 +9220,11 @@ function buildOutput({ insurerMode = false } = {}) {
     lines.push(...majorMedicationLines, "");
   }
 
-  lines.push(...buildNoticeLines(collectNotices()), "", ...buildFiveYearLines(), "", ...buildTenYearLines(), "", ...buildUniverseDisclosureLines());
+  lines.push(...buildNoticeLines(collectNotices()), "", ...buildFiveYearLines(), "", ...buildTenYearLines());
+
+  if (!insurerMode) {
+    lines.push("", ...buildUniverseDisclosureLines());
+  }
 
   return lines.join("\n");
 }
@@ -10445,10 +10496,6 @@ function bindApplicationUiEvents() {
   safeOn(copyButton, "click", () => {
     if (!ensureValid()) return;
     copyText(buildOutput(), "복사 완료");
-  });
-  safeOn(kakaoCopyButton, "click", () => {
-    if (!ensureValid()) return;
-    copyText(buildOutput().replace(/\n{3,}/g, "\n\n"), "카카오톡용 복사 완료");
   });
   safeOn(insurerCopyButton, "click", () => {
     if (!ensureValid()) return;
