@@ -9475,13 +9475,18 @@ function upsertAutoSavedCustomer(state) {
   const selectedId = savedCustomerSelect.value;
 
   if (!selectedId && customerName.length < 2) {
-    return "";
+    return { id: "", changed: false };
   }
 
   const customers = getStoredCustomers();
   const existingIndex = selectedId
     ? customers.findIndex((customer) => customer.id === selectedId)
     : -1;
+  if (existingIndex >= 0
+    && JSON.stringify(customers[existingIndex].state) === JSON.stringify(state)) {
+    return { id: selectedId, changed: false };
+  }
+
   const now = new Date().toISOString();
   const id =
     existingIndex >= 0
@@ -9499,16 +9504,20 @@ function upsertAutoSavedCustomer(state) {
   } else if (customerName.length >= 2) {
     customers.push(record);
   } else {
-    return "";
+    return { id: "", changed: false };
   }
 
   setStoredCustomers(customers);
-  return id;
+  return { id, changed: true };
 }
 
 function runAutoSave() {
   const state = collectCustomerState();
-  const savedId = upsertAutoSavedCustomer(state);
+  const previousDraft = readJsonStorage(getScopedStorageKey(autoSaveDraftKey), {});
+  const draftChanged = JSON.stringify(previousDraft?.state ?? null) !== JSON.stringify(state);
+  const { id: savedId, changed: customerChanged } = upsertAutoSavedCustomer(state);
+  if (!draftChanged && !customerChanged) return;
+
   saveAutoDraft(state);
   rememberUiSession(savedId ? { selectedId: savedId } : {});
   if (savedId) {
@@ -9524,7 +9533,7 @@ async function saveCurrentCustomerAndSync() {
 
 function scheduleAutoSave() {
   window.clearTimeout(autoSaveTimer);
-  autoSaveTimer = window.setTimeout(runAutoSave, 700);
+  autoSaveTimer = window.setTimeout(runAutoSave, 2000);
 }
 
 function restoreAutoSavedDraft() {
