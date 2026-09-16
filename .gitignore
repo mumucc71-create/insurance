@@ -4,3 +4,4 @@ test-universe.pdf
 *.exe
 .agents/
 .codex/
+.sites-runtime/

@@ -9497,7 +9497,7 @@ function renderSavedCustomerList(selectedId = "") {
     savedCustomerSelect.value = selectCustomers[0].id;
   }
 
-  renderCustomerSearchResults(customers);
+  renderCustomerSearchResults(selectCustomers);
 }
 
 function saveAutoDraft(state = collectCustomerState()) {
