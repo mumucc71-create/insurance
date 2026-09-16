@@ -9372,10 +9372,15 @@ function getCustomerDedupeKey(customer) {
   return [name, resident || birthDate, phone].filter(Boolean).join("|") || name;
 }
 
+function getCustomerListKey(customer) {
+  const name = normalizeSearchText(customer?.state?.fields?.customerName);
+  return name || getCustomerDedupeKey(customer);
+}
+
 function getLatestCustomersForSelect(customers) {
   const grouped = new Map();
   customers.forEach((customer) => {
-    const key = getCustomerDedupeKey(customer);
+    const key = getCustomerListKey(customer);
     const previous = grouped.get(key);
     const customerTime = new Date(customer.updatedAt || customer.createdAt || 0).getTime();
     const previousTime = new Date(previous?.updatedAt || previous?.createdAt || 0).getTime();
@@ -9387,8 +9392,8 @@ function getLatestCustomersForSelect(customers) {
 function getLatestCustomerIdForSamePerson(customerId, customers) {
   const selectedCustomer = customers.find((customer) => customer.id === customerId);
   if (!selectedCustomer) return customerId;
-  const selectedKey = getCustomerDedupeKey(selectedCustomer);
-  return getLatestCustomersForSelect(customers).find((customer) => getCustomerDedupeKey(customer) === selectedKey)?.id || customerId;
+  const selectedKey = getCustomerListKey(selectedCustomer);
+  return getLatestCustomersForSelect(customers).find((customer) => getCustomerListKey(customer) === selectedKey)?.id || customerId;
 }
 
 function dedupeStoredCustomers() {
