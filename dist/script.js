@@ -9442,11 +9442,11 @@ function dedupeStoredCustomers() {
 }
 
 function getFilteredCustomers(keyword = getCustomerSearchKeyword()) {
-  return getStoredCustomers()
+  const filteredCustomers = getStoredCustomers()
     .filter((customer) => {
       return !keyword || buildCustomerSearchText(customer).includes(keyword);
-    })
-    .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+    });
+  return getLatestCustomersForSelect(filteredCustomers);
 }
 
 function renderCustomerSearchResults(customers) {
