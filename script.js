@@ -9796,28 +9796,36 @@ function printCustomerRecord() {
 function printPhoneConsultationMemo() {
   const title = phoneConsultationTitleInput?.value.trim() || "전화상담 메모";
   const memo = phoneConsultationMemoInput?.value.trim() || "작성된 메모가 없습니다.";
-  const originalDocumentTitle = document.title;
-  const printView = document.createElement("section");
-  const heading = document.createElement("h1");
-  const content = document.createElement("pre");
+  const printWindow = window.open("", "_blank");
+  if (!printWindow) {
+    showPhoneConsultationStatus("인쇄창이 차단되었습니다. 브라우저에서 팝업을 허용해주세요.");
+    return;
+  }
 
-  printView.className = "phone-consultation-print-view";
-  heading.textContent = title;
-  content.textContent = memo;
-  printView.append(heading, content);
-  document.body.append(printView);
-  document.body.classList.add("phone-consultation-print");
-  document.title = title;
-
-  const cleanup = () => {
-    document.body.classList.remove("phone-consultation-print");
-    printView.remove();
-    document.title = originalDocumentTitle;
-  };
-
-  window.addEventListener("afterprint", cleanup, { once: true });
-  window.print();
-  window.setTimeout(cleanup, 0);
+  printWindow.addEventListener("afterprint", () => printWindow.close(), { once: true });
+  printWindow.document.open();
+  printWindow.document.write(`<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <title>${escapeHtml(title)}</title>
+    <style>
+      @page { margin: 18mm; }
+      body { margin: 0; color: #111; font-family: "Malgun Gothic", sans-serif; }
+      h1 { margin: 0 0 18px; padding-bottom: 10px; border-bottom: 2px solid #111; font-size: 22pt; line-height: 1.35; }
+      pre { margin: 0; white-space: pre-wrap; word-break: keep-all; overflow-wrap: anywhere; font: 11pt/1.7 "Malgun Gothic", sans-serif; }
+    </style>
+  </head>
+  <body>
+    <h1>${escapeHtml(title)}</h1>
+    <pre>${escapeHtml(memo)}</pre>
+  </body>
+</html>`);
+  printWindow.document.close();
+  printWindow.setTimeout(() => {
+    printWindow.focus();
+    printWindow.print();
+  }, 150);
 }
 
 function downloadFile(filename, content, type) {

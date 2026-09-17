@@ -1,6 +1,7 @@
 $port = 8765
 $root = $PSScriptRoot
-$url = "http://localhost:$port/index.html"
+$cacheVersion = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+$url = "http://localhost:$port/index.html?v=$cacheVersion"
 $listener = New-Object System.Net.HttpListener
 $listener.Prefixes.Add("http://localhost:$port/")
 $listener.Start()
@@ -31,6 +32,9 @@ while ($listener.IsListening) {
       default { "application/octet-stream" }
     }
     $context.Response.ContentType = $contentType
+    $context.Response.Headers.Add("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+    $context.Response.Headers.Add("Pragma", "no-cache")
+    $context.Response.Headers.Add("Expires", "0")
     $context.Response.ContentLength64 = $bytes.Length
     $context.Response.OutputStream.Write($bytes, 0, $bytes.Length)
   } else {
