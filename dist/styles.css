@@ -970,6 +970,10 @@ body.promotion-mode .app {
   resize: vertical;
 }
 
+.phone-consultation-print-view {
+  display: none;
+}
+
 #phoneConsultationHighlightCanvas,
 #phoneConsultationCommonHighlightCanvas {
   position: absolute;
@@ -1878,6 +1882,29 @@ textarea:focus,
 
   body.customer-record-print .preview {
     display: block !important;
+  }
+
+  body.phone-consultation-print .phone-consultation-print-view {
+    display: block !important;
+    color: #111;
+  }
+
+  .phone-consultation-print-view h1 {
+    margin: 0 0 18px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #111;
+    font-size: 22pt;
+    line-height: 1.35;
+  }
+
+  .phone-consultation-print-view pre {
+    margin: 0;
+    white-space: pre-wrap;
+    word-break: keep-all;
+    overflow-wrap: anywhere;
+    font-family: "Malgun Gothic", sans-serif;
+    font-size: 11pt;
+    line-height: 1.7;
   }
 }
 

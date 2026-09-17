@@ -27,6 +27,7 @@ const phoneConsultationEraserButton = document.querySelector("#phoneConsultation
 const phoneConsultationHighlightSwatches = document.querySelectorAll("#phoneConsultationHighlightTools [data-highlight-color]");
 const phoneConsultationStatus = document.querySelector("#phoneConsultationStatus");
 const savePhoneConsultationButton = document.querySelector("#savePhoneConsultationButton");
+const printPhoneConsultationButton = document.querySelector("#printPhoneConsultationButton");
 const newPhoneConsultationButton = document.querySelector("#newPhoneConsultationButton");
 const deletePhoneConsultationButton = document.querySelector("#deletePhoneConsultationButton");
 const phoneConsultationCommonTemplateInput = document.querySelector("#phoneConsultationCommonTemplateInput");
@@ -9792,6 +9793,33 @@ function printCustomerRecord() {
   window.setTimeout(cleanup, 0);
 }
 
+function printPhoneConsultationMemo() {
+  const title = phoneConsultationTitleInput?.value.trim() || "전화상담 메모";
+  const memo = phoneConsultationMemoInput?.value.trim() || "작성된 메모가 없습니다.";
+  const originalDocumentTitle = document.title;
+  const printView = document.createElement("section");
+  const heading = document.createElement("h1");
+  const content = document.createElement("pre");
+
+  printView.className = "phone-consultation-print-view";
+  heading.textContent = title;
+  content.textContent = memo;
+  printView.append(heading, content);
+  document.body.append(printView);
+  document.body.classList.add("phone-consultation-print");
+  document.title = title;
+
+  const cleanup = () => {
+    document.body.classList.remove("phone-consultation-print");
+    printView.remove();
+    document.title = originalDocumentTitle;
+  };
+
+  window.addEventListener("afterprint", cleanup, { once: true });
+  window.print();
+  window.setTimeout(cleanup, 0);
+}
+
 function downloadFile(filename, content, type) {
   const blob = new Blob([content], { type });
   const url = URL.createObjectURL(blob);
@@ -10128,6 +10156,7 @@ function bindApplicationUiEvents() {
   safeOn(phoneConsultationButton, "click", openPhoneConsultation);
   safeOn(promotionButton, "click", openPromotion);
   safeOn(savePhoneConsultationButton, "click", savePhoneConsultationMemo);
+  safeOn(printPhoneConsultationButton, "click", printPhoneConsultationMemo);
   safeOn(phoneConsultationMemoList, "pointerdown", (event) => {
     if (event.target.closest("[data-memo-delete-id], [data-memo-group-title]")) return;
     const button = event.target.closest("[data-memo-id]");
